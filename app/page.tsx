@@ -2,6 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 
 export default function Chat() {
   const { messages, sendMessage, status } = useChat();
@@ -42,7 +43,11 @@ export default function Chat() {
             >
               {message.parts.map((part, i) => {
                 if (part.type === "text") {
-                  return (
+                  return message.role === "assistant" ? (
+                    <div key={`${message.id}-${i}`} className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-strong:text-zinc-50 prose-a:text-amber-400">
+                      <ReactMarkdown>{part.text}</ReactMarkdown>
+                    </div>
+                  ) : (
                     <div key={`${message.id}-${i}`} className="whitespace-pre-wrap">
                       {part.text}
                     </div>
