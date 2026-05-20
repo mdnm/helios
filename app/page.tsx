@@ -11,6 +11,7 @@ import {
 } from "react";
 import ReactMarkdown from "react-markdown";
 import { HeliosSun } from "./helios-sun";
+import { compressIfNeeded, MAX_IMAGE_BYTES } from "./compress";
 import { convertHeicToJpeg, isHeicFile } from "./heic";
 import { Icon } from "./icons";
 import { log, warn } from "./log";
@@ -39,7 +40,7 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<FileList | undefined>(undefined);
   const [attachError, setAttachError] = useState<string | null>(null);
-  const [isConverting, setIsConverting] = useState(false);
+  const [prepareLabel, setPrepareLabel] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("hero");
   const [dragDepth, setDragDepth] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -205,12 +206,12 @@ export default function Chat() {
     if (arr.length === 0) return false;
     let candidate = arr[0];
 
-    if (await isHeicFile(candidate)) {
-      log("attach.heic.detected", { name: candidate.name });
-      setIsConverting(true);
-      setAttachError(null);
-      const t0 = performance.now();
-      try {
+    try {
+      if (await isHeicFile(candidate)) {
+        log("attach.heic.detected", { name: candidate.name });
+        setPrepareLabel("Converting HEIC");
+        setAttachError(null);
+        const t0 = performance.now();
         candidate = await convertHeicToJpeg(candidate);
         log("attach.heic.converted", {
           ms: Math.round(performance.now() - t0),
@@ -218,16 +219,26 @@ export default function Chat() {
           outType: candidate.type,
           outSize: candidate.size,
         });
-      } catch (err) {
-        warn("attach.heic.failed", err);
-        setAttachError(
-          `Couldn't convert ${candidate.name}. Try a JPEG or PNG instead.`,
-        );
-        setIsConverting(false);
-        return false;
       }
-      setIsConverting(false);
+
+      if (candidate.size > MAX_IMAGE_BYTES) {
+        log("attach.oversized", {
+          size: candidate.size,
+          max: MAX_IMAGE_BYTES,
+        });
+        setPrepareLabel("Compressing");
+        setAttachError(null);
+        candidate = await compressIfNeeded(candidate);
+      }
+    } catch (err) {
+      warn("attach.prepare.failed", err);
+      setAttachError(
+        `Couldn't process ${candidate.name}. Try a different image.`,
+      );
+      setPrepareLabel(null);
+      return false;
     }
+    setPrepareLabel(null);
 
     if (!ALLOWED_TYPES.has(candidate.type)) {
       log("attach.rejected.unsupported", {
@@ -236,6 +247,14 @@ export default function Chat() {
       });
       setAttachError(
         `${candidate.name} isn't a supported image. Use JPEG, PNG, GIF, or WebP.`,
+      );
+      return false;
+    }
+
+    if (candidate.size > MAX_IMAGE_BYTES) {
+      log("attach.rejected.oversized", { size: candidate.size });
+      setAttachError(
+        `Couldn't get ${candidate.name} below 5MB. Try a smaller image.`,
       );
       return false;
     }
@@ -457,11 +476,11 @@ export default function Chat() {
                   {attachError}
                 </div>
               )}
-              {isConverting && (
+              {prepareLabel && (
                 <div className="attachment-preview converting">
                   <div className="thumb-placeholder" />
                   <span className="name">
-                    Converting HEIC
+                    {prepareLabel}
                     <span className="dots">
                       <span>.</span>
                       <span>.</span>
@@ -470,7 +489,7 @@ export default function Chat() {
                   </span>
                 </div>
               )}
-              {!isConverting && files && files[0] && (
+              {!prepareLabel && files && files[0] && (
                 <div className="attachment-preview">
                   {filePreview && (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -540,7 +559,7 @@ export default function Chat() {
                   disabled={
                     isBusy ||
                     phase === "moving" ||
-                    isConverting ||
+                    prepareLabel !== null ||
                     (!input.trim() && !files)
                   }
                   aria-label="Send"
