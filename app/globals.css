@@ -96,19 +96,6 @@ input, textarea { font-family: inherit; }
   letter-spacing: -0.01em;
   color: var(--ink);
 }
-.head .pill {
-  margin-left: auto;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: var(--ink-3);
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-}
-.head .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: #2F8A4F; }
-
 /* Floating sun — animates between hero & corner */
 .helios-sun-wrap {
   position: fixed;

@@ -407,9 +407,6 @@ export default function Chat() {
 
         <header className="head">
           <span className="wordmark">Helios</span>
-          <span className="pill">
-            <span className="dot" /> Balkonkraftwerk advisor
-          </span>
         </header>
 
         <div ref={sunRef} className={`helios-sun-wrap ${phase !== "hero" ? "compact" : ""}`}>
