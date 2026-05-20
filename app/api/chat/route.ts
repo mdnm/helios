@@ -14,6 +14,7 @@ import { calcRoi } from "@/lib/tools/calc-roi";
 import { getSubsidies } from "@/lib/tools/get-subsidies";
 import { draftLandlordLetter } from "@/lib/tools/draft-landlord-letter";
 import { suggestReplies } from "@/lib/tools/suggest-replies";
+import { submitOrder } from "@/lib/tools/submit-order";
 
 export const maxDuration = 60;
 
@@ -55,6 +56,7 @@ export async function POST(req: Request) {
       getSubsidies,
       draftLandlordLetter,
       suggestReplies,
+      submitOrder,
     },
     onStepFinish: ({ toolCalls, toolResults, finishReason, usage }) => {
       logApi("chat.step", {
