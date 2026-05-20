@@ -1,19 +1,15 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Onest } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const onest = Onest({
+  variable: "--font-onest",
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
-  title: "Helios — Solar Energy Assistant",
+  title: "Helios — Energy Assistant",
   description: "AI-powered assistant for Balkonkraftwerk in Germany",
 };
 
@@ -23,12 +19,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
+    <html lang="en">
+      <body className={`${onest.variable} antialiased`}>{children}</body>
     </html>
   );
 }
