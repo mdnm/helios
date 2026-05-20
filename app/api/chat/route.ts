@@ -19,7 +19,11 @@ export const maxDuration = 60;
 function logApi(event: string, data?: unknown): void {
   if (data === undefined) {
     console.log(`[helios:api] ${event}`);
-  } else {
+    return;
+  }
+  try {
+    console.log(`[helios:api] ${event} ${JSON.stringify(data)}`);
+  } catch {
     console.log(`[helios:api] ${event}`, data);
   }
 }
