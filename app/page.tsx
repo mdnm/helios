@@ -62,12 +62,15 @@ function clearTicketCookie() {
   document.cookie = `${TICKET_COOKIE}=; path=/; max-age=0`;
 }
 
-function checkStripeReturn(): boolean {
+function hasStripeReturn(): boolean {
   if (typeof window === "undefined") return false;
   const params = new URLSearchParams(window.location.search);
-  if (!params.get("session_id")) return false;
+  return params.has("session_id");
+}
+
+function clearStripeReturnUrl() {
+  if (typeof window === "undefined") return;
   window.history.replaceState({}, "", window.location.pathname);
-  return true;
 }
 
 function PaymentConfirmation() {
@@ -134,7 +137,11 @@ function useTicketSession() {
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [returnedFromStripe] = useState(checkStripeReturn);
+  const [returnedFromStripe] = useState(hasStripeReturn);
+
+  useEffect(() => {
+    if (returnedFromStripe) clearStripeReturnUrl();
+  }, [returnedFromStripe]);
 
   useEffect(() => {
     async function init() {
