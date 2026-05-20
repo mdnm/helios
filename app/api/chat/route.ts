@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
 
   const result = streamText({
-    model: anthropic("claude-sonnet-4-5-20250514"),
+    model: anthropic("claude-sonnet-4-5"),
     system: systemPrompt,
     messages: await convertToModelMessages(messages),
     stopWhen: stepCountIs(5),
