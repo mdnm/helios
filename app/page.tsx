@@ -12,13 +12,17 @@ import {
 } from "react";
 import ReactMarkdown from "react-markdown";
 import {
-  EmbeddedCheckout,
-  EmbeddedCheckoutProvider,
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements,
 } from "@stripe/react-stripe-js";
+import type { StripeElementsOptions } from "@stripe/stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
 import { HeliosSun } from "./helios-sun";
 import { compressIfNeeded, MAX_IMAGE_BYTES } from "./compress";
 import { Icon } from "./icons";
+import { ProductCards } from "./product-cards";
 import { log, warn } from "./log";
 
 const stripePromise = loadStripe(
@@ -29,7 +33,7 @@ const CORNER_SIZE = 40;
 const TICKET_COOKIE = "helios-ticket-id";
 
 type Phase = "hero" | "moving" | "chat";
-type TicketMessage = { role: string; content: string; timestamp?: string };
+type TicketMessage = { role: string; content: string; parts?: Array<Record<string, unknown>>; timestamp?: string };
 
 const ALLOWED_TYPES = new Set([
   "image/jpeg",
@@ -87,6 +91,78 @@ function PaymentConfirmation() {
   );
 }
 
+const STRIPE_APPEARANCE = {
+  theme: "flat" as const,
+  variables: {
+    colorPrimary: "#F46B16",
+    colorBackground: "#FFFFFF",
+    colorText: "#1F1408",
+    colorDanger: "#df1b41",
+    fontFamily: "Onest, ui-sans-serif, system-ui, -apple-system, sans-serif",
+    spacingUnit: "4px",
+    borderRadius: "12px",
+    colorTextSecondary: "#5A4523",
+    colorTextPlaceholder: "#BBA98A",
+  },
+  rules: {
+    ".Input": {
+      border: "1px solid rgba(74, 47, 14, 0.14)",
+      boxShadow: "none",
+      padding: "12px",
+    },
+    ".Input:focus": {
+      border: "1px solid rgba(244, 107, 22, 0.4)",
+      boxShadow: "0 0 0 3px rgba(244, 107, 22, 0.1)",
+    },
+    ".Label": {
+      fontSize: "13px",
+      fontWeight: "500",
+      color: "#5A4523",
+    },
+  },
+};
+
+function PaymentForm({ onPaymentComplete }: { onPaymentComplete: () => void }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setSubmitting(true);
+    setError(null);
+
+    const { error: stripeError } = await stripe.confirmPayment({
+      elements,
+      confirmParams: { return_url: window.location.origin },
+      redirect: "if_required",
+    });
+
+    if (stripeError) {
+      setError(stripeError.message ?? "Payment failed");
+      setSubmitting(false);
+    } else {
+      onPaymentComplete();
+    }
+  }, [stripe, elements, onPaymentComplete]);
+
+  return (
+    <form onSubmit={handleSubmit} className="payment-form">
+      <div className="payment-form-header">
+        <Icon.Lock />
+        <span>Secure payment</span>
+      </div>
+      <PaymentElement />
+      {error && <div className="payment-error">{error}</div>}
+      <button type="submit" disabled={!stripe || submitting} className="payment-submit">
+        {submitting ? "Processing…" : "Pay now"}
+      </button>
+    </form>
+  );
+}
+
 function StripeCheckout({
   clientSecret,
   onPaymentComplete,
@@ -96,7 +172,7 @@ function StripeCheckout({
 }) {
   const [paid, setPaid] = useState(false);
 
-  const onComplete = useCallback(() => {
+  const handleComplete = useCallback(() => {
     setPaid(true);
     onPaymentComplete();
   }, [onPaymentComplete]);
@@ -104,19 +180,24 @@ function StripeCheckout({
   if (paid) {
     return (
       <div className="payment-confirmation">
-        Payment completed! Your Balkonkraftwerk order is confirmed.
+        <Icon.Check /> Payment completed! Your Balkonkraftwerk order is confirmed.
       </div>
     );
   }
 
+  const options: StripeElementsOptions = {
+    clientSecret,
+    appearance: STRIPE_APPEARANCE,
+    fonts: [
+      { cssSrc: "https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&display=swap" },
+    ],
+  };
+
   return (
-    <div className="stripe-checkout">
-      <EmbeddedCheckoutProvider
-        stripe={stripePromise}
-        options={{ clientSecret, onComplete }}
-      >
-        <EmbeddedCheckout />
-      </EmbeddedCheckoutProvider>
+    <div className="stripe-payment">
+      <Elements stripe={stripePromise} options={options}>
+        <PaymentForm onPaymentComplete={handleComplete} />
+      </Elements>
     </div>
   );
 }
@@ -157,7 +238,14 @@ function useTicketSession() {
                 data.messages.map((m: TicketMessage, i: number) => ({
                   id: `restored-${i}`,
                   role: m.role as "user" | "assistant",
-                  parts: [{ type: "text" as const, text: m.content }],
+                  parts: Array.isArray(m.parts) && m.parts.length > 0
+                    ? m.parts.map((p) => {
+                        if (typeof p.type === "string" && p.type.startsWith("tool-")) {
+                          return { ...p, type: p.type } as unknown as { type: "text"; text: string };
+                        }
+                        return { type: "text" as const, text: String(p.text ?? "") };
+                      })
+                    : [{ type: "text" as const, text: m.content }],
                   createdAt: m.timestamp ? new Date(m.timestamp) : new Date(),
                 })),
               );
@@ -267,7 +355,6 @@ export default function Chat() {
   const getHeroPos = useCallback(() => {
     const el = composerRef.current;
     const h = el?.offsetHeight ?? 120;
-    // Composer in hero mode is vertically centered.
     const composerTop = window.innerHeight / 2 - h / 2;
     return {
       top: composerTop - HERO_SIZE - 56,
@@ -319,10 +406,13 @@ export default function Chat() {
     [getHeroPos, getCornerPos],
   );
 
-  useLayoutEffect(() => {
-    placeSunAt(phase === "hero" ? "hero" : "corner");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const composerCallbackRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      composerRef.current = node;
+      if (node) placeSunAt(phase === "hero" ? "hero" : "corner");
+    },
+    [placeSunAt, phase],
+  );
 
   useEffect(() => {
     const onResize = () => placeSunAt(phase === "hero" ? "hero" : "corner");
@@ -787,6 +877,30 @@ export default function Chat() {
                           />
                         );
                       }
+                      if (part.type === "tool-getProducts") {
+                        const toolPart = part as unknown as {
+                          state: string;
+                          output?: { products?: Array<{ id: string; name: string; modules: string; totalWp: number; inverter: string; battery: string | null; smartMeter: string | null; mounting: string; connection: string; price: number; selfConsumptionRate: number; bestFor: string }> };
+                        };
+                        if (
+                          toolPart.state === "output-available" &&
+                          toolPart.output?.products?.length
+                        ) {
+                          return (
+                            <ProductCards
+                              key={`${message.id}-${i}`}
+                              products={toolPart.output.products}
+                              selectedId={null}
+                              onSelect={(id) => {
+                                const product = toolPart.output!.products!.find((p) => p.id === id);
+                                if (product) {
+                                  handleChipClick(message.id, `I'd like the ${product.name} option`);
+                                }
+                              }}
+                            />
+                          );
+                        }
+                      }
                       if (
                         part.type === "tool-submitOrder" &&
                         !paymentCompleted
@@ -851,7 +965,7 @@ export default function Chat() {
           </div>
         </div>
 
-        <div ref={composerRef} className="composer-region">
+        <div ref={composerCallbackRef} className="composer-region">
           <form
             onSubmit={(e) => {
               e.preventDefault();

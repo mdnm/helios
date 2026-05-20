@@ -26,9 +26,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object;
-    const submissionId = session.metadata?.epilot_submission_id;
+  if (event.type === "payment_intent.succeeded") {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+    const submissionId = paymentIntent.metadata?.epilot_submission_id;
 
     if (submissionId) {
       try {

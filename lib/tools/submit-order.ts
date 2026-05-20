@@ -231,20 +231,18 @@ export const submitOrder = tool({
         }
       }
 
-      const session = await stripe.checkout.sessions.create({
-        ui_mode: "embedded_page",
-        mode: "payment",
-        customer_email: email,
-        line_items: [{ price: config.stripePriceId, quantity: 1 }],
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: config.price * 100,
+        currency: "eur",
+        receipt_email: email,
         metadata: {
           epilot_submission_id: submissionId,
           product_name: config.name,
         },
-        return_url: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/?session_id={CHECKOUT_SESSION_ID}`,
       });
 
       return {
-        clientSecret: session.client_secret,
+        clientSecret: paymentIntent.client_secret,
         submissionId,
         productName: config.name,
         price: config.price,

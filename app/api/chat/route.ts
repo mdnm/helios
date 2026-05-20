@@ -5,7 +5,7 @@ import {
   stepCountIs,
 } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
-import { systemPrompt } from "@/lib/system-prompt";
+import { buildSystemPrompt, fetchCustomerContext } from "@/lib/system-prompt";
 import { extractLocation } from "@/lib/tools/extract-location";
 import { extractBalconyInfo } from "@/lib/tools/extract-balcony-info";
 import { extractConsumption } from "@/lib/tools/extract-consumption";
@@ -42,9 +42,11 @@ export async function POST(req: Request) {
     lastParts: partTypes,
   });
 
+  const customerContext = await fetchCustomerContext();
+
   const result = streamText({
     model: anthropic("claude-sonnet-4-5"),
-    system: systemPrompt,
+    system: buildSystemPrompt(customerContext),
     messages: await convertToModelMessages(messages),
     stopWhen: stepCountIs(5),
     tools: {

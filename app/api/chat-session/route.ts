@@ -53,9 +53,14 @@ export async function GET(req: NextRequest) {
   const data = await res.json();
   const entity = data.entity ?? data;
 
+  const msgs = (entity.chat_messages ?? []).map((m: Record<string, unknown>) => ({
+    ...m,
+    parts: Array.isArray(m.parts) ? m.parts : [{ type: "text", text: m.content ?? "" }],
+  }));
+
   return NextResponse.json({
     ticketId: entity._id,
-    messages: entity.chat_messages ?? [],
+    messages: msgs,
   });
 }
 
@@ -66,19 +71,28 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Missing ticketId or messages" }, { status: 400 });
   }
 
-  const serializedMessages = messages.map((m: Record<string, unknown>) => ({
-    role: m.role,
-    content:
-      typeof m.content === "string"
-        ? m.content
-        : Array.isArray(m.parts)
-          ? (m.parts as Array<Record<string, unknown>>)
-              .filter((p) => p.type === "text")
-              .map((p) => p.text)
-              .join("\n")
-          : JSON.stringify(m),
-    timestamp: m.createdAt ?? new Date().toISOString(),
-  }));
+  const serializedMessages = messages.map((m: Record<string, unknown>) => {
+    const parts = Array.isArray(m.parts)
+      ? (m.parts as Array<Record<string, unknown>>).map((p) => {
+          if (p.type === "file" && typeof p.url === "string" && p.url.startsWith("data:")) {
+            return { type: "text", text: "[image]" };
+          }
+          return p;
+        })
+      : [{ type: "text", text: typeof m.content === "string" ? m.content : JSON.stringify(m) }];
+
+    const textContent = parts
+      .filter((p) => p.type === "text")
+      .map((p) => p.text)
+      .join("\n");
+
+    return {
+      role: m.role,
+      content: textContent,
+      parts,
+      timestamp: m.createdAt ?? new Date().toISOString(),
+    };
+  });
 
   const res = await fetch(`${ENTITY_API}/ticket/${ticketId}`, {
     method: "PATCH",
