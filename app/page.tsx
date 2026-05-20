@@ -312,6 +312,34 @@ export default function Chat() {
     [attachFiles],
   );
 
+  // Paste handler — accepts clipboard images from screenshots, copied
+  // image files, etc. Attached to window so paste works regardless of
+  // which element has focus (text-only paste still falls through to
+  // the default textarea behaviour).
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items || items.length === 0) return;
+      const images: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          const f = item.getAsFile();
+          if (f) images.push(f);
+        }
+      }
+      if (images.length === 0) return;
+      e.preventDefault();
+      log("paste.image", {
+        count: images.length,
+        types: images.map((f) => f.type),
+      });
+      void attachFiles(images);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [attachFiles]);
+
   const handleSend = useCallback(
     async (override?: string) => {
       const text = (override ?? input).trim();
