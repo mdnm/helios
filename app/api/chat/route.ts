@@ -13,6 +13,7 @@ import { getProducts } from "@/lib/tools/get-products";
 import { calcRoi } from "@/lib/tools/calc-roi";
 import { getSubsidies } from "@/lib/tools/get-subsidies";
 import { draftLandlordLetter } from "@/lib/tools/draft-landlord-letter";
+import { suggestReplies } from "@/lib/tools/suggest-replies";
 
 export const maxDuration = 60;
 
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
       calcRoi,
       getSubsidies,
       draftLandlordLetter,
+      suggestReplies,
     },
   });
 

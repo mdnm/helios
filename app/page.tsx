@@ -33,6 +33,8 @@ const SUGGESTIONS = [
   { icon: <Icon.Mail />, t: "Draft my landlord letter" },
 ];
 
+type SuggestRepliesOutput = { options: string[] };
+
 export default function Chat() {
   const { messages, sendMessage, status, setMessages } = useChat();
   const [input, setInput] = useState("");
@@ -41,10 +43,17 @@ export default function Chat() {
   const [isConverting, setIsConverting] = useState(false);
   const [phase, setPhase] = useState<Phase>("hero");
   const [dragDepth, setDragDepth] = useState(0);
+  // Track which messages' chips have already been used so we hide them after click.
+  const [usedChipMessageIds, setUsedChipMessageIds] = useState<Set<string>>(
+    new Set(),
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const sunRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const chatInnerRef = useRef<HTMLDivElement>(null);
+  // Mutable so updating it from the scroll handler doesn't trigger a re-render.
+  const stickToBottomRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isDragging = dragDepth > 0;
 
@@ -141,10 +150,63 @@ export default function Chat() {
     return () => ro.disconnect();
   }, [phase, placeSunAt]);
 
+  // Track whether the user is "stuck" to the bottom of the chat. We only
+  // auto-scroll while they are — if they scroll up to read earlier messages,
+  // we stop yanking them down. A user-initiated scroll close to the bottom
+  // (within 80px) re-engages stickiness.
+  //
+  // Stored in a ref (not state) so updates from the scroll handler don't
+  // trigger React re-renders.
   useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, isBusy]);
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const onScroll = () => {
+      const distance =
+        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+      stickToBottomRef.current = distance < 80;
+    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => scroller.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Drive auto-scroll directly off React's render cycle. The AI SDK gives us
+  // a fresh `messages` array reference on every streamed token batch (and on
+  // every part update), so this useLayoutEffect re-runs in lockstep with
+  // streaming — far more reliable than a ResizeObserver, which can miss
+  // small or coalesced reflows. Using useLayoutEffect means the scroll lands
+  // before the browser paints, so the user never sees an unscrolled frame.
+  useLayoutEffect(() => {
+    if (!stickToBottomRef.current) return;
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    scroller.scrollTop = scroller.scrollHeight;
+  }, [messages, isBusy]);
+
+  // ResizeObserver as a belt-and-suspenders fallback for layout changes that
+  // aren't tied to a render — images loading, fonts swapping in, the composer
+  // resizing as the textarea grows.
+  useEffect(() => {
+    const inner = chatInnerRef.current;
+    const scroller = scrollRef.current;
+    if (!inner || !scroller) return;
+    const ro = new ResizeObserver(() => {
+      if (stickToBottomRef.current) scroller.scrollTop = scroller.scrollHeight;
+    });
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, []);
+
+  // When a user message is sent, force-stick to bottom even if they had
+  // scrolled up — sending implies re-engagement with the live conversation.
+  useEffect(() => {
+    if (!messages.length) return;
+    if (messages[messages.length - 1].role === "user") {
+      stickToBottomRef.current = true;
+    }
+    // Deliberately keyed on length only; the layout effect above already
+    // handles streamed-token updates of the same message.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length]);
 
   // Autosize textarea
   useEffect(() => {
@@ -300,6 +362,40 @@ export default function Chat() {
     requestAnimationFrame(() => placeSunAt("hero"));
   }, [setMessages, placeSunAt, clearAttachment]);
 
+  const handleChipClick = (messageId: string, option: string) => {
+    if (isBusy || phase === "moving") return;
+    setUsedChipMessageIds((prev) => {
+      const next = new Set(prev);
+      next.add(messageId);
+      return next;
+    });
+    void handleSend(option);
+  };
+
+  // Pull the latest suggest_replies output from an assistant message, if any.
+  const getChipsForMessage = (message: (typeof messages)[number]) => {
+    if (message.role !== "assistant") return null;
+    if (usedChipMessageIds.has(message.id)) return null;
+    for (let i = message.parts.length - 1; i >= 0; i--) {
+      const part = message.parts[i];
+      if (
+        part.type === "tool-suggestReplies" &&
+        "state" in part &&
+        part.state === "output-available"
+      ) {
+        const output = part.output as SuggestRepliesOutput | undefined;
+        if (output?.options?.length) return output.options;
+      }
+    }
+    return null;
+  };
+
+  // Only show chips on the most recent assistant message — older chips would
+  // be stale conversational context.
+  const lastAssistantId = [...messages]
+    .reverse()
+    .find((m) => m.role === "assistant")?.id;
+
   return (
     <div
       className="stage"
@@ -331,44 +427,70 @@ export default function Chat() {
         </div>
 
         <div className="chat-region" ref={scrollRef}>
-          <div className="chat-inner">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`msg ${message.role === "user" ? "user" : "ai"}`}
-              >
-                <div className="body">
-                  {message.role === "assistant" && <div className="who">Helios</div>}
-                  {message.parts.map((part, i) => {
-                    if (part.type === "text") {
-                      return message.role === "assistant" ? (
-                        <ReactMarkdown key={`${message.id}-${i}`}>
-                          {part.text}
-                        </ReactMarkdown>
-                      ) : (
-                        <p key={`${message.id}-${i}`} style={{ whiteSpace: "pre-wrap" }}>
-                          {part.text}
-                        </p>
-                      );
-                    }
-                    if (
-                      part.type === "file" &&
-                      part.mediaType?.startsWith("image/")
-                    ) {
-                      return (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={`${message.id}-${i}`}
-                          src={part.url}
-                          alt="Uploaded"
-                        />
-                      );
-                    }
-                    return null;
-                  })}
+          <div className="chat-inner" ref={chatInnerRef}>
+            {messages.map((message) => {
+              const chips =
+                message.id === lastAssistantId
+                  ? getChipsForMessage(message)
+                  : null;
+              return (
+                <div
+                  key={message.id}
+                  className={`msg ${message.role === "user" ? "user" : "ai"}`}
+                >
+                  <div className="body">
+                    {message.role === "assistant" && (
+                      <div className="who">Helios</div>
+                    )}
+                    {message.parts.map((part, i) => {
+                      if (part.type === "text") {
+                        return message.role === "assistant" ? (
+                          <ReactMarkdown key={`${message.id}-${i}`}>
+                            {part.text}
+                          </ReactMarkdown>
+                        ) : (
+                          <p
+                            key={`${message.id}-${i}`}
+                            style={{ whiteSpace: "pre-wrap" }}
+                          >
+                            {part.text}
+                          </p>
+                        );
+                      }
+                      if (
+                        part.type === "file" &&
+                        part.mediaType?.startsWith("image/")
+                      ) {
+                        return (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={`${message.id}-${i}`}
+                            src={part.url}
+                            alt="Uploaded"
+                          />
+                        );
+                      }
+                      return null;
+                    })}
+                    {chips && (
+                      <div className="chips">
+                        {chips.map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            className="chip"
+                            onClick={() => handleChipClick(message.id, option)}
+                            disabled={isBusy || phase === "moving"}
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {isBusy &&
               messages.length > 0 &&
