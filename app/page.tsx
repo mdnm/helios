@@ -13,6 +13,7 @@ import ReactMarkdown from "react-markdown";
 import { HeliosSun } from "./helios-sun";
 import { convertHeicToJpeg, isHeicFile } from "./heic";
 import { Icon } from "./icons";
+import { log, warn } from "./log";
 
 const HERO_SIZE = 168;
 const CORNER_SIZE = 40;
@@ -49,6 +50,11 @@ export default function Chat() {
   const isDragging = dragDepth > 0;
 
   const isBusy = status === "submitted" || status === "streaming";
+
+  // Log status / message-count transitions
+  useEffect(() => {
+    log("chat.status", { status, messages: messages.length });
+  }, [status, messages.length]);
   const sunState: "idle" | "loading" = isBusy ? "loading" : "idle";
   const inChat = phase !== "hero" || messages.length > 0;
   const composerSlid = phase === "moving" || phase === "chat";
@@ -192,16 +198,28 @@ export default function Chat() {
 
   const attachFiles = useCallback(async (incoming: FileList | File[]) => {
     const arr = Array.from(incoming);
+    log("attach.incoming", {
+      count: arr.length,
+      items: arr.map((f) => ({ name: f.name, type: f.type, size: f.size })),
+    });
     if (arr.length === 0) return false;
     let candidate = arr[0];
 
     if (await isHeicFile(candidate)) {
+      log("attach.heic.detected", { name: candidate.name });
       setIsConverting(true);
       setAttachError(null);
+      const t0 = performance.now();
       try {
         candidate = await convertHeicToJpeg(candidate);
+        log("attach.heic.converted", {
+          ms: Math.round(performance.now() - t0),
+          outName: candidate.name,
+          outType: candidate.type,
+          outSize: candidate.size,
+        });
       } catch (err) {
-        console.warn("HEIC conversion failed", err);
+        warn("attach.heic.failed", err);
         setAttachError(
           `Couldn't convert ${candidate.name}. Try a JPEG or PNG instead.`,
         );
@@ -212,6 +230,10 @@ export default function Chat() {
     }
 
     if (!ALLOWED_TYPES.has(candidate.type)) {
+      log("attach.rejected.unsupported", {
+        name: candidate.name,
+        type: candidate.type,
+      });
       setAttachError(
         `${candidate.name} isn't a supported image. Use JPEG, PNG, GIF, or WebP.`,
       );
@@ -222,6 +244,11 @@ export default function Chat() {
     dt.items.add(candidate);
     setFiles(dt.files);
     setAttachError(null);
+    log("attach.accepted", {
+      name: candidate.name,
+      type: candidate.type,
+      size: candidate.size,
+    });
     return true;
   }, []);
 
@@ -251,12 +278,20 @@ export default function Chat() {
   const onDragEnter = useCallback((e: React.DragEvent) => {
     if (!Array.from(e.dataTransfer.types).includes("Files")) return;
     e.preventDefault();
-    setDragDepth((d) => d + 1);
+    setDragDepth((d) => {
+      const next = d + 1;
+      if (d === 0) log("drag.enter");
+      return next;
+    });
   }, []);
   const onDragLeave = useCallback((e: React.DragEvent) => {
     if (!Array.from(e.dataTransfer.types).includes("Files")) return;
     e.preventDefault();
-    setDragDepth((d) => Math.max(0, d - 1));
+    setDragDepth((d) => {
+      const next = Math.max(0, d - 1);
+      if (next === 0) log("drag.leave");
+      return next;
+    });
   }, []);
   const onDragOver = useCallback((e: React.DragEvent) => {
     if (!Array.from(e.dataTransfer.types).includes("Files")) return;
@@ -266,6 +301,7 @@ export default function Chat() {
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
+      log("drag.drop", { count: e.dataTransfer.files.length });
       setDragDepth(0);
       void attachFiles(e.dataTransfer.files);
     },
@@ -275,17 +311,33 @@ export default function Chat() {
   const handleSend = useCallback(
     async (override?: string) => {
       const text = (override ?? input).trim();
-      if (!text && !files) return;
-      if (isBusy || phase === "moving") return;
+      if (!text && !files) {
+        log("send.skipped.empty");
+        return;
+      }
+      if (isBusy || phase === "moving") {
+        log("send.skipped.busy", { isBusy, phase });
+        return;
+      }
 
       const isFirst = phase === "hero";
+      log("send.start", {
+        textLen: text.length,
+        hasFiles: !!files,
+        isFirst,
+      });
       if (isFirst) {
         setPhase("moving");
+        log("phase.moving");
+        const t0 = performance.now();
         await arcAnimate();
+        log("arc.done", { ms: Math.round(performance.now() - t0) });
       }
       setPhase("chat");
+      log("phase.chat");
 
       sendMessage({ text, files });
+      log("send.dispatched");
       setInput("");
       clearAttachment();
     },
@@ -293,10 +345,12 @@ export default function Chat() {
   );
 
   const resetChat = useCallback(() => {
+    log("chat.reset");
     setMessages([]);
     setInput("");
     clearAttachment();
     setPhase("hero");
+    log("phase.hero");
     requestAnimationFrame(() => placeSunAt("hero"));
   }, [setMessages, placeSunAt, clearAttachment]);
 

@@ -1,15 +1,26 @@
 "use client";
 
+import { log, warn } from "./log";
+
 // Client-side HEIC → JPEG conversion that preserves the EXIF data the
 // server's extract-location tool needs (GPS lat/lon).
 
 export async function isHeicFile(file: File): Promise<boolean> {
-  if (file.type === "image/heic" || file.type === "image/heif") return true;
-  if (/\.(heic|heif)$/i.test(file.name)) return true;
+  if (file.type === "image/heic" || file.type === "image/heif") {
+    log("heic.detect.mime", { type: file.type });
+    return true;
+  }
+  if (/\.(heic|heif)$/i.test(file.name)) {
+    log("heic.detect.extension", { name: file.name });
+    return true;
+  }
   const { isHeic } = await import("heic-to/next");
   try {
-    return await isHeic(file);
-  } catch {
+    const result = await isHeic(file);
+    log("heic.detect.signature", { name: file.name, result });
+    return result;
+  } catch (err) {
+    warn("heic.detect.error", err);
     return false;
   }
 }
@@ -26,11 +37,18 @@ type GpsLikeExif = {
 };
 
 export async function convertHeicToJpeg(file: File): Promise<File> {
+  const tStart = performance.now();
+  log("heic.convert.start", { name: file.name, size: file.size });
+
+  const tDeps = performance.now();
   const [{ heicTo }, exifrMod, piexifMod] = await Promise.all([
     import("heic-to/next"),
     import("exifr"),
     import("piexifjs"),
   ]);
+  log("heic.convert.deps-loaded", {
+    ms: Math.round(performance.now() - tDeps),
+  });
   const piexif = piexifMod.default;
   const exifrParse: (
     data: File,
@@ -40,6 +58,7 @@ export async function convertHeicToJpeg(file: File): Promise<File> {
 
   // Read the EXIF we care about BEFORE conversion (heic-to strips it).
   let parsed: GpsLikeExif | null = null;
+  const tExif = performance.now();
   try {
     const result = await exifrParse(file, {
       gps: true,
@@ -53,15 +72,28 @@ export async function convertHeicToJpeg(file: File): Promise<File> {
       ],
     });
     parsed = (result ?? null) as GpsLikeExif | null;
-  } catch {
+    log("heic.convert.exif-read", {
+      ms: Math.round(performance.now() - tExif),
+      hasGps:
+        typeof parsed?.latitude === "number" &&
+        typeof parsed?.longitude === "number",
+      tags: parsed ? Object.keys(parsed) : [],
+    });
+  } catch (err) {
+    warn("heic.convert.exif-read-failed", err);
     parsed = null;
   }
 
+  const tDecode = performance.now();
   const jpegBlob = (await heicTo({
     blob: file,
     type: "image/jpeg",
     quality: 0.92,
   })) as Blob;
+  log("heic.convert.decoded", {
+    ms: Math.round(performance.now() - tDecode),
+    jpegSize: jpegBlob.size,
+  });
 
   const outName = file.name.replace(/\.[^.]+$/, "") + ".jpg";
   const bare = () =>
@@ -70,7 +102,13 @@ export async function convertHeicToJpeg(file: File): Promise<File> {
       lastModified: file.lastModified,
     });
 
-  if (!parsed) return bare();
+  if (!parsed) {
+    log("heic.convert.done", {
+      ms: Math.round(performance.now() - tStart),
+      exifPreserved: false,
+    });
+    return bare();
+  }
 
   try {
     type ExifValue = string | number | [number, number] | [number, number][];
@@ -117,8 +155,16 @@ export async function convertHeicToJpeg(file: File): Promise<File> {
       Object.keys(exifIfd).length === 0 &&
       Object.keys(gps).length === 0
     ) {
+      log("heic.convert.no-tags", {
+        ms: Math.round(performance.now() - tStart),
+      });
       return bare();
     }
+    log("heic.convert.exif-built", {
+      zerothTags: Object.keys(zeroth).length,
+      exifTags: Object.keys(exifIfd).length,
+      gpsTags: Object.keys(gps).length,
+    });
 
     const exifObj = {
       "0th": zeroth,
@@ -134,12 +180,18 @@ export async function convertHeicToJpeg(file: File): Promise<File> {
     const newJpegDataUrl = piexif.insert(exifBytes, jpegDataUrl);
     const newBlob = dataUrlToBlob(newJpegDataUrl);
 
-    return new File([newBlob], outName, {
+    const out = new File([newBlob], outName, {
       type: "image/jpeg",
       lastModified: file.lastModified,
     });
+    log("heic.convert.done", {
+      ms: Math.round(performance.now() - tStart),
+      exifPreserved: true,
+      outSize: out.size,
+    });
+    return out;
   } catch (err) {
-    console.warn("EXIF injection failed; returning JPEG without EXIF", err);
+    warn("heic.convert.exif-inject-failed", err);
     return bare();
   }
 }
