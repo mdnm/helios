@@ -6,7 +6,7 @@
 
 Helios can guide customers through product selection and ROI calculation, but cannot actually place an order. When a customer says "I want to buy this", the agent admits it's a demo and fabricates a fake confirmation. This breaks immersion and undermines the platform story — Helios should complete the sale end-to-end.
 
-The epilot platform already has a Journey Submission API that creates orders, contacts, and triggers workflows through automations. There is a configured journey (`ed4019f0-543f-11f1-b3d8-e1f29b5e5ad1`, org `20000697`) with three Balkonkraftwerk products and entity mappings that create Order and Contact entities on submission.
+The epilot platform already has a Journey Submission API that creates orders, contacts, and triggers workflows through automations. There is a configured journey (`56020690-5456-11f1-9d3a-f10cf60e5f3b`, org `20000697`) with three Balkonkraftwerk products and entity mappings that create Order and Contact entities on submission.
 
 ## Decision
 

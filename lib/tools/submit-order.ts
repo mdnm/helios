@@ -5,7 +5,7 @@ import { BALKONKRAFTWERK_CONFIGS } from "./get-products";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
-const JOURNEY_ID = "ed4019f0-543f-11f1-b3d8-e1f29b5e5ad1";
+const JOURNEY_ID = "56020690-5456-11f1-9d3a-f10cf60e5f3b";
 const ORG_ID = "20000697";
 const SUBMISSION_API =
   "https://submission.sls.epilot.io/v1/submission/submissions";
