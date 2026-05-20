@@ -170,14 +170,25 @@ function StripeCheckout({
   clientSecret: string;
   onPaymentComplete: () => void;
 }) {
-  const [paid, setPaid] = useState(false);
+  const [status, setStatus] = useState<"loading" | "paid" | "pending">("loading");
 
-  const handleComplete = useCallback(() => {
-    setPaid(true);
-    onPaymentComplete();
-  }, [onPaymentComplete]);
+  useEffect(() => {
+    stripePromise.then((stripe) => {
+      if (!stripe) return;
+      stripe.retrievePaymentIntent(clientSecret).then(({ paymentIntent }) => {
+        if (paymentIntent?.status === "succeeded") {
+          setStatus("paid");
+          onPaymentComplete();
+        } else {
+          setStatus("pending");
+        }
+      });
+    });
+  }, [clientSecret, onPaymentComplete]);
 
-  if (paid) {
+  if (status === "loading") return null;
+
+  if (status === "paid") {
     return (
       <div className="payment-confirmation">
         <Icon.Check /> Payment completed! Your Balkonkraftwerk order is confirmed.
@@ -196,7 +207,7 @@ function StripeCheckout({
   return (
     <div className="stripe-payment">
       <Elements stripe={stripePromise} options={options}>
-        <PaymentForm onPaymentComplete={handleComplete} />
+        <PaymentForm onPaymentComplete={() => { setStatus("paid"); onPaymentComplete(); }} />
       </Elements>
     </div>
   );
