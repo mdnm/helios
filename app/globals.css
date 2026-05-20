@@ -440,6 +440,39 @@ input, textarea { font-family: inherit; }
   margin-bottom: 4px;
 }
 
+/* Quick-reply chips shown beneath an assistant message when the model calls
+   suggest_replies. Visually echo the .suggest pills used on the hero screen. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 13px;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.chip:hover {
+  border-color: rgba(244,107,22,.32);
+  color: var(--ink);
+  background: #FFFBF4;
+  transform: translateY(-1px);
+}
+.chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .thinking {
   font-weight: 400;
   font-size: 15px;
