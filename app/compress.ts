@@ -2,8 +2,12 @@
 
 import { log, warn } from "./log";
 
-// Anthropic's hard limit for inline images.
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+// Anthropic's 5 MB image limit applies to the base64-encoded payload, not
+// the binary file. base64 expansion is 4/3, so a 4 MB JPEG turns into a
+// ~5.4 MB base64 string and the API rejects it. Budget against binary
+// at 3.5 MB to keep base64 comfortably under 5 MB after expansion +
+// EXIF re-injection + JSON framing.
+export const MAX_IMAGE_BYTES = Math.floor(3.5 * 1024 * 1024);
 const MAX_DIMENSION = 2048;
 const QUALITY_LADDER = [0.85, 0.75, 0.65, 0.55, 0.45, 0.35];
 
