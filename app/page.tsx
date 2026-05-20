@@ -12,7 +12,6 @@ import {
 import ReactMarkdown from "react-markdown";
 import { HeliosSun } from "./helios-sun";
 import { compressIfNeeded, MAX_IMAGE_BYTES } from "./compress";
-import { convertHeicToJpeg, isHeicFile } from "./heic";
 import { Icon } from "./icons";
 import { log, warn } from "./log";
 
@@ -206,49 +205,35 @@ export default function Chat() {
     if (arr.length === 0) return false;
     let candidate = arr[0];
 
-    try {
-      if (await isHeicFile(candidate)) {
-        log("attach.heic.detected", { name: candidate.name });
-        setPrepareLabel("Converting HEIC");
-        setAttachError(null);
-        const t0 = performance.now();
-        candidate = await convertHeicToJpeg(candidate);
-        log("attach.heic.converted", {
-          ms: Math.round(performance.now() - t0),
-          outName: candidate.name,
-          outType: candidate.type,
-          outSize: candidate.size,
-        });
-      }
-
-      if (candidate.size > MAX_IMAGE_BYTES) {
-        log("attach.oversized", {
-          size: candidate.size,
-          max: MAX_IMAGE_BYTES,
-        });
-        setPrepareLabel("Compressing");
-        setAttachError(null);
-        candidate = await compressIfNeeded(candidate);
-      }
-    } catch (err) {
-      warn("attach.prepare.failed", err);
-      setAttachError(
-        `Couldn't process ${candidate.name}. Try a different image.`,
-      );
-      setPrepareLabel(null);
-      return false;
-    }
-    setPrepareLabel(null);
-
     if (!ALLOWED_TYPES.has(candidate.type)) {
       log("attach.rejected.unsupported", {
         name: candidate.name,
         type: candidate.type,
       });
       setAttachError(
-        `${candidate.name} isn't a supported image. Use JPEG, PNG, GIF, or WebP.`,
+        `${candidate.name} isn't supported. Use JPEG, PNG, GIF, or WebP.`,
       );
       return false;
+    }
+
+    if (candidate.size > MAX_IMAGE_BYTES) {
+      log("attach.oversized", {
+        size: candidate.size,
+        max: MAX_IMAGE_BYTES,
+      });
+      setPrepareLabel("Compressing");
+      setAttachError(null);
+      try {
+        candidate = await compressIfNeeded(candidate);
+      } catch (err) {
+        warn("attach.compress.failed", err);
+        setAttachError(
+          `Couldn't compress ${candidate.name}. Try a smaller image.`,
+        );
+        setPrepareLabel(null);
+        return false;
+      }
+      setPrepareLabel(null);
     }
 
     if (candidate.size > MAX_IMAGE_BYTES) {
@@ -532,7 +517,7 @@ export default function Chat() {
                   Attach
                   <input
                     type="file"
-                    accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
                     className="hidden"
                     style={{ display: "none" }}
                     onChange={(e) => {
