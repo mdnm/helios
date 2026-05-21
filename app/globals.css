@@ -146,7 +146,10 @@ input, textarea { font-family: inherit; }
   position: fixed;
   top: 0; left: 0;
   transform-origin: 0 0;
-  will-change: transform;
+  /* Hint the compositor about both properties we animate, and isolate so the
+     filter rasterizes on its own layer instead of forcing repaints below. */
+  will-change: transform, filter;
+  isolation: isolate;
   z-index: 5;
   pointer-events: none;
   transition: filter 0.6s cubic-bezier(0.4, 0, 0.2, 1);
@@ -156,16 +159,15 @@ input, textarea { font-family: inherit; }
 .shared-sun.screen-opening,
 .shared-sun.screen-ending {
   filter:
-    /* Razor-thin contour — the brightest edge, defines the disc */
+    /* Razor-thin contour — defines the disc edge */
     drop-shadow(0 0 6px rgba(255, 255, 255, 1))
-    /* Close hot halo — boosts edge contrast against the warm sky */
+    /* Close hot halo — edge contrast against warm sky */
     drop-shadow(0 0 22px rgba(255, 255, 255, 0.90))
-    /* Warm offset — readable elevation cue, stays on-palette */
+    /* Warm offset — elevation cue */
     drop-shadow(0 10px 32px rgba(255, 130, 30, 0.50))
-    /* Mid halo */
-    drop-shadow(0 0 110px rgba(255, 255, 255, 0.60))
-    /* Atmospheric outer bloom */
-    drop-shadow(0 0 260px rgba(255, 255, 255, 0.32));
+    /* Atmospheric bloom — one wide layer instead of two
+       (260px+110px is GPU-expensive during the screen transition). */
+    drop-shadow(0 0 140px rgba(255, 255, 255, 0.55));
 }
 .shared-sun.screen-app {
   filter:

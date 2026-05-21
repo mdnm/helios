@@ -371,6 +371,7 @@ export default function Chat() {
     restoredMessagesRef.current = true;
     setMessages(initialMessages);
     setPhase("chat");
+    setScreen("app");
   }, [initialMessages, loading, setMessages]);
 
   useEffect(() => {
@@ -922,17 +923,6 @@ export default function Chat() {
     .reverse()
     .find((m) => m.role === "assistant")?.id;
 
-  if (loading) {
-    return (
-      <div className="stage">
-        <div className="screen app-screen">
-          <div className="ambient" />
-          <div className="loading-session">Loading...</div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       ref={stageRef}
@@ -981,11 +971,6 @@ export default function Chat() {
 
           <header className="head">
             <span className="wordmark">Helios</span>
-            {ticketId && (
-              <span className="ticket-id" title={ticketId}>
-                #{ticketId.slice(0, 8)}
-              </span>
-            )}
             <MuteToggle variant="app" />
           </header>
 
