@@ -531,9 +531,9 @@ export default function Chat() {
           onWake={() => {
             audio.unlock();
             audio.playBling();
-            // Long enough that the waves are clearly audible tailing off as
-            // the sun begins its glide, fully silent by the time it lands.
-            audio.fadeOutAmbient(900);
+            // Quick enough that the ambient gets out of the chime's way at
+            // its peak (~250 ms), but smooth enough not to feel cut off.
+            audio.fadeOutAmbient(400);
             goto("app");
           }}
         />
