@@ -350,15 +350,20 @@ input, textarea { font-family: inherit; }
 }
 
 /* ───── Opening screen ───── */
-/* Background is no longer the click target — only the sun is. Background
-   clicks still bubble to the pointerdown listener (which unlocks audio),
-   they just don't transition. */
 .opening-screen .opening-mark {
   position: absolute;
   left: 50%;
   top: 10%;
   transform: translate(-50%, 0);
   z-index: 3;
+}
+/* Invisible full-bleed button that absorbs every click. Sits above the
+   warm-sky + horizon (z:1-2) but below the shared-sun (z:5). The sun has
+   pointer-events:none, so its clicks pass through to this target. */
+.opening-screen .wake-target {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
   appearance: none;
   background: transparent;
   border: 0;
@@ -366,12 +371,12 @@ input, textarea { font-family: inherit; }
   cursor: pointer;
   font: inherit;
   color: inherit;
-  border-radius: 50%;
 }
-.opening-screen .opening-mark:focus { outline: none; }
-.opening-screen .opening-mark:focus-visible {
+.opening-screen .wake-target:focus { outline: none; }
+.opening-screen .wake-target:focus-visible {
   outline: 3px solid rgba(255, 250, 236, 0.95);
-  outline-offset: 8px;
+  outline-offset: -16px;
+  border-radius: 16px;
 }
 
 /* ───── Ending screen ───── */

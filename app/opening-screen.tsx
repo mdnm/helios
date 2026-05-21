@@ -33,18 +33,20 @@ export function OpeningScreen({ onWake }: { onWake: () => void }) {
     <main ref={screenRef} className="screen opening-screen">
       <div className="warm-sky" aria-hidden="true" />
       <Horizon />
-      <button
-        type="button"
-        className="opening-mark"
-        onClick={onWake}
-        aria-label="Wake Helios"
-      >
+      <div className="opening-mark" aria-hidden="true">
         <div
           className="sun-slot sun-slot-opening"
           style={{ width: OPENING_SIZE, height: OPENING_SIZE }}
-          aria-hidden="true"
         />
-      </button>
+      </div>
+      {/* Full-bleed wake target sits above the warm-sky / horizon so any
+          click anywhere wakes Helios. Keyboard users land on it via Tab. */}
+      <button
+        type="button"
+        className="wake-target"
+        onClick={onWake}
+        aria-label="Wake Helios"
+      />
       <MuteToggle variant="opening" />
     </main>
   );

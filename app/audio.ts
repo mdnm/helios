@@ -176,11 +176,13 @@ class AudioManager {
     const now = ctx.currentTime;
     const dur = 1.2;
 
-    // Shared master envelope: gentle swell + smooth release.
+    // Shared master envelope: gentle swell + smooth release. Peak is set
+    // a touch above the ambient's 0.5 target so the chime sits clearly on
+    // top of the ambient's tail during fadeOutAmbient(220).
     const env = ctx.createGain();
     env.gain.setValueAtTime(0, now);
-    env.gain.linearRampToValueAtTime(0.25, now + 0.25);
-    env.gain.linearRampToValueAtTime(0.22, now + 0.7);
+    env.gain.linearRampToValueAtTime(0.32, now + 0.25);
+    env.gain.linearRampToValueAtTime(0.28, now + 0.7);
     env.gain.exponentialRampToValueAtTime(0.0001, now + dur);
     env.connect(this.masterGain);
     env.connect(this.delay);

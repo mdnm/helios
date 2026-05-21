@@ -835,6 +835,16 @@ export default function Chat() {
     async (next: Screen) => {
       if (next === screen) return;
       log("screen.goto", { from: screen, to: next });
+      // Audio choreography lives here (not in onWake) so the same
+      // transitions fire regardless of how they're triggered — click,
+      // keyboard, end-conversation button, etc.
+      if (screen === "opening" && next !== "opening") {
+        audio.unlock();
+        if (next === "app") audio.playBling();
+        // 220 ms gets ambient out of the way by the chime's peak (~250 ms)
+        // without feeling cut off.
+        audio.fadeOutAmbient(220);
+      }
       if (next === "app") {
         setMessages([]);
         setInput("");
@@ -842,7 +852,6 @@ export default function Chat() {
         lastSyncedLength.current = 0;
         clearAttachment();
         setPhase("hero");
-        void resetSession();
       }
       // Play composer collapse before unmounting the app screen.
       if (screen === "app" && next !== "app") {
@@ -852,7 +861,7 @@ export default function Chat() {
       }
       setScreen(next);
     },
-    [screen, setMessages, clearAttachment, resetSession],
+    [screen, setMessages, clearAttachment],
   );
 
   // Cmd/Ctrl + ArrowLeft/Right walks the screen sequence. Capture phase so we
@@ -940,18 +949,7 @@ export default function Chat() {
         <HeliosSun state={sunPhase} />
       </div>
 
-      {screen === "opening" && (
-        <OpeningScreen
-          onWake={() => {
-            audio.unlock();
-            audio.playBling();
-            // Quick enough that the ambient gets out of the chime's way at
-            // its peak (~250 ms), but smooth enough not to feel cut off.
-            audio.fadeOutAmbient(400);
-            goto("app");
-          }}
-        />
-      )}
+      {screen === "opening" && <OpeningScreen onWake={() => goto("app")} />}
 
       {screen === "app" && (
         <div
