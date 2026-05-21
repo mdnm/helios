@@ -96,6 +96,22 @@ input, textarea { font-family: inherit; }
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--ink);
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.head .wordmark:hover {
+  background: var(--surface-muted);
+  color: var(--accent);
+}
+.head .wordmark:focus-visible {
+  outline: 2px solid rgba(244, 107, 22, 0.45);
+  outline-offset: 2px;
 }
 .mute-toggle {
   display: inline-grid;

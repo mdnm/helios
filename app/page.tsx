@@ -968,7 +968,22 @@ export default function Chat() {
           )}
 
           <header className="head">
-            <span className="wordmark">Helios</span>
+            <button
+              type="button"
+              className="wordmark"
+              onClick={() => {
+                setMessages([]);
+                setInput("");
+                setPaymentCompleted(false);
+                lastSyncedLength.current = 0;
+                clearAttachment();
+                setPhase("hero");
+                void resetSession();
+              }}
+              aria-label="New conversation"
+            >
+              Helios
+            </button>
             <MuteToggle variant="app" />
           </header>
 
