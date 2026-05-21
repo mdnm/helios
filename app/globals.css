@@ -113,6 +113,14 @@ input, textarea { font-family: inherit; }
   outline: 2px solid rgba(244, 107, 22, 0.45);
   outline-offset: 2px;
 }
+.head .wordmark:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.head .wordmark:disabled:hover {
+  background: transparent;
+  color: var(--ink);
+}
 .mute-toggle {
   display: inline-grid;
   place-items: center;
@@ -198,12 +206,14 @@ input, textarea { font-family: inherit; }
   visibility: hidden;
   pointer-events: none;
 }
+/* Fixed to the viewport rather than living inside composer-region — that
+   way its bounding rect is stable even while composer-region is in the
+   middle of its 700ms slide between hero-center and chat-bottom. */
 .sun-slot-app-hero {
-  position: absolute;
+  position: fixed;
   left: 50%;
-  bottom: 100%;
+  bottom: calc(50vh + var(--composer-height, 120px) / 2 + 56px);
   transform: translateX(-50%);
-  margin-bottom: 56px;
 }
 /* Permanent rest position once the conversation starts: bottom-aligned with
    the chat-region's bottom edge, aligned with the composer's left edge. Fixed

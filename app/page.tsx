@@ -980,7 +980,9 @@ export default function Chat() {
                 setPhase("hero");
                 void resetSession();
               }}
+              disabled={isBusy}
               aria-label="New conversation"
+              title={isBusy ? "Wait for Helios to finish" : "New conversation"}
             >
               Helios
             </button>
@@ -1130,14 +1132,14 @@ export default function Chat() {
               style={{ width: CORNER_SIZE, height: CORNER_SIZE }}
             />
           )}
+          {phase === "hero" && (
+            <div
+              className="sun-slot sun-slot-app-hero"
+              style={{ width: HERO_SIZE, height: HERO_SIZE }}
+            />
+          )}
 
           <div ref={composerRef} className="composer-region">
-            {phase === "hero" && (
-              <div
-                className="sun-slot sun-slot-app-hero"
-                style={{ width: HERO_SIZE, height: HERO_SIZE }}
-              />
-            )}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
