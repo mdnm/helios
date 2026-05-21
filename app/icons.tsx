@@ -75,6 +75,20 @@ export const Icon = {
       <line x1="6" y1="18" x2="18" y2="6" />
     </svg>
   ),
+  Speaker: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <path d="M11 5L6 9H3v6h3l5 4z" />
+      <path d="M15.5 8.5a4.5 4.5 0 0 1 0 7" />
+      <path d="M18.5 5.5a8.5 8.5 0 0 1 0 13" />
+    </svg>
+  ),
+  SpeakerOff: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <path d="M11 5L6 9H3v6h3l5 4z" />
+      <line x1="22" y1="9" x2="16" y2="15" />
+      <line x1="16" y1="9" x2="22" y2="15" />
+    </svg>
+  ),
   Sparkle: (p: SVGProps<SVGSVGElement>) => (
     <svg {...base} {...p}>
       <path d="M12 3l1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3z" fill="currentColor" stroke="none" />
