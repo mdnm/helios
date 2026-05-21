@@ -3,7 +3,12 @@ import { z } from "zod";
 import Stripe from "stripe";
 import { BALKONKRAFTWERK_CONFIGS } from "./get-products";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const MOCK_STRIPE = process.env.MOCK_STRIPE !== "false";
+
+// Only construct a real Stripe client when we actually need it.
+const stripe = MOCK_STRIPE
+  ? null
+  : new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const JOURNEY_ID = "56020690-5456-11f1-9d3a-f10cf60e5f3b";
 const ORG_ID = "20000697";
@@ -231,18 +236,28 @@ export const submitOrder = tool({
         }
       }
 
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: config.price * 100,
-        currency: "eur",
-        receipt_email: email,
-        metadata: {
-          epilot_submission_id: submissionId,
-          product_name: config.name,
-        },
-      });
+      let clientSecret: string;
+      if (stripe) {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: config.price * 100,
+          currency: "eur",
+          receipt_email: email,
+          metadata: {
+            epilot_submission_id: submissionId,
+            product_name: config.name,
+          },
+        });
+        clientSecret = paymentIntent.client_secret ?? "";
+      } else {
+        // Mock mode: fabricate a recognizable clientSecret so the frontend
+        // routes to the mock checkout component.
+        clientSecret = `mock_pi_${Date.now()}_secret_${Math.random()
+          .toString(36)
+          .slice(2)}`;
+      }
 
       return {
-        clientSecret: paymentIntent.client_secret,
+        clientSecret,
         submissionId,
         productName: config.name,
         price: config.price,

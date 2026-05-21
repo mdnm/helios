@@ -16,6 +16,8 @@ export const BALKONKRAFTWERK_CONFIGS = [
     selfConsumptionRate: 0.35,
     bestFor:
       "Small consumption (~1,500 kWh/year), person who is home during the day, tight budget",
+    annualKwh: 315,
+    annualSavings: 110,
     epilotProductId: "930d833b-30ba-48bb-93e8-4091dcc00a67",
     epilotPriceId: "7cf924d5-d28f-4ac7-b613-5df207140950",
     stripeProductId: "prod_UYG2EKcNh92KzQ",
@@ -35,6 +37,8 @@ export const BALKONKRAFTWERK_CONFIGS = [
     selfConsumptionRate: 0.65,
     bestFor:
       "Average household (2,000–3,000 kWh/year), away from home during daytime",
+    annualKwh: 585,
+    annualSavings: 205,
     epilotProductId: "c398ff4a-834e-43ea-bd7a-deda0687874c",
     epilotPriceId: "97607400-69ef-4219-b688-1ee28231903c",
     stripeProductId: "prod_UYG2WBGf7ADAFE",
@@ -55,6 +59,8 @@ export const BALKONKRAFTWERK_CONFIGS = [
     selfConsumptionRate: 0.92,
     bestFor:
       "Any household wanting maximum savings, especially daytime-away households",
+    annualKwh: 830,
+    annualSavings: 290,
     epilotProductId: "e22352b4-6645-4d5e-9975-88721638e968",
     epilotPriceId: "b382300b-db42-475e-b2c1-60925a1e57bd",
     stripeProductId: "prod_UYG2d0bpBU5SK1",

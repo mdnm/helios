@@ -714,7 +714,7 @@ input, textarea { font-family: inherit; }
               margin-bottom 700ms cubic-bezier(0.45, 0, 0.3, 1);
 }
 .app-screen.in-chat .chat-region {
-  bottom: calc(var(--composer-height, 120px) + 48px);
+  bottom: calc(var(--composer-height, 120px) + 56px);
   margin-bottom: 0;
 }
 .chat-region::-webkit-scrollbar { width: 8px; }
@@ -1190,6 +1190,20 @@ input, textarea { font-family: inherit; }
   color: var(--ink-4);
 }
 .product-includes li.off .spec-label { color: var(--ink-4); }
+.product-image {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  width: 100%;
+  background: var(--surface-muted);
+  overflow: hidden;
+}
+.product-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .product-best {
   font-size: 12.5px;
   color: var(--ink-2);
@@ -1345,3 +1359,484 @@ input, textarea { font-family: inherit; }
   margin-top: 12px;
 }
 .payment-confirmation svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+/* ─── Right-side cart sidebar ─────────────────────────────────────────
+   Fixed to the right edge once a product has been selected. Mirrors a
+   shopping cart: product chip on top, key stats, subsidy block, then a
+   live order-status timeline + estimated arrival. Hidden on narrow
+   viewports where it would overlap the centered chat column. */
+.cart-sidebar {
+  position: fixed;
+  top: 88px;
+  right: 24px;
+  width: 280px;
+  z-index: 4;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.7) inset,
+    0 1px 2px rgba(74,47,14,.04),
+    0 18px 44px -22px rgba(74,47,14,.22);
+  animation: cart-in 0.45s cubic-bezier(0.22, 0.8, 0.2, 1) both;
+}
+@keyframes cart-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 1023px) {
+  .cart-sidebar { display: none; }
+}
+
+.cart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cart-head-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.cart-head-loc {
+  font-size: 10.5px;
+  color: var(--ink-4);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Product chip */
+.cart-product {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.cart-product-thumb {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.cart-product-thumb img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.cart-product-pick {
+  position: absolute;
+  top: -4px; right: -4px;
+  display: grid;
+  place-items: center;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, var(--sun-1), var(--sun-2));
+  color: #2A1B07;
+  border: 2px solid var(--surface);
+}
+.cart-product-pick svg { width: 8px; height: 8px; }
+.cart-product-meta { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.cart-product-tier {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  color: var(--ink);
+  line-height: 1.15;
+}
+.cart-product-tag {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  letter-spacing: -0.005em;
+}
+.cart-product-price {
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.cart-product-subsidy {
+  margin-left: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+/* Stats */
+.cart-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.cart-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cart-stat dt {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.cart-stat dd { margin: 0; }
+.cart-num {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  line-height: 1;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  white-space: nowrap;
+}
+.cart-unit { font-size: 10.5px; color: var(--ink-3); font-weight: 500; margin-left: 1px; }
+
+/* Subsidy block */
+.cart-subsidy {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(244,107,22,.06), rgba(244,107,22,.03));
+  border: 1px solid rgba(244,107,22,.18);
+}
+.cart-subsidy-tag {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid rgba(244,107,22,.22);
+  border-radius: 5px;
+  padding: 2px 5px;
+  height: fit-content;
+  flex-shrink: 0;
+}
+.cart-subsidy-body { min-width: 0; }
+.cart-subsidy-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+  line-height: 1.25;
+}
+.cart-subsidy-sub {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: -0.005em;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+/* Order status timeline */
+.cart-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+}
+.cart-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+.cart-step::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 18px;
+  width: 1px;
+  height: calc(100% + 10px);
+  background: var(--line);
+}
+.cart-step:last-child::before { display: none; }
+.cart-step-dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1.5px solid var(--line-strong);
+  color: transparent;
+  flex-shrink: 0;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.cart-step-dot svg { width: 10px; height: 10px; }
+.cart-step-label {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  letter-spacing: -0.005em;
+}
+.cart-step.done .cart-step-dot {
+  background: #1F8A4F;
+  border-color: #1F8A4F;
+  color: #FFFFFF;
+}
+.cart-step.done .cart-step-label { color: var(--ink-2); }
+.cart-step.active .cart-step-dot {
+  background: linear-gradient(180deg, var(--sun-1), var(--sun-2));
+  border-color: rgba(244,107,22,.45);
+  color: #2A1B07;
+  box-shadow: 0 0 0 3px rgba(244,107,22,.14);
+}
+.cart-step.active .cart-step-label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Ship date callout */
+.cart-ship {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+}
+.cart-ship svg { width: 18px; height: 18px; color: var(--accent); flex-shrink: 0; }
+.cart-ship-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.cart-ship-date {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin-top: 1px;
+}
+
+/* ─── Installer calendar widget ────────────────────────────────────── */
+.cal-widget {
+  margin-top: 12px;
+  width: min(440px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.7) inset,
+    0 1px 2px rgba(74,47,14,.04),
+    0 12px 30px -22px rgba(74,47,14,.20);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.cal-eyebrow {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.cal-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  color: var(--ink);
+  margin-top: 2px;
+}
+.cal-month {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.cal-month-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.cal-month-hint {
+  font-size: 10.5px;
+  color: var(--accent);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.cal-dow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-align: center;
+  padding: 4px 0;
+}
+.cal-day {
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+}
+.cal-day.muted { color: var(--ink-4); opacity: 0.6; }
+.cal-day.off { color: var(--ink-4); cursor: not-allowed; }
+.cal-day.avail:hover { background: var(--surface-muted); }
+.cal-day.suggested {
+  background: var(--accent-tint);
+  color: var(--ink);
+  font-weight: 600;
+  border-color: rgba(244,107,22,.32);
+}
+.cal-day.selected {
+  background: linear-gradient(180deg, var(--sun-1), var(--sun-2));
+  color: #2A1B07;
+  border-color: transparent;
+  box-shadow: 0 1px 0 rgba(255,255,255,.5) inset, 0 6px 14px -6px rgba(244,107,22,.55);
+}
+
+.cal-slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+}
+.cal-slot-info { display: flex; align-items: center; gap: 10px; }
+.cal-slot-info svg { width: 18px; height: 18px; color: var(--accent); flex-shrink: 0; }
+.cal-slot-date {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.cal-slot-window {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin-top: 1px;
+}
+.cal-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 11px;
+  border: 0;
+  background: linear-gradient(180deg, var(--sun-1), var(--sun-2));
+  color: #2A1B07;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  box-shadow: 0 1px 0 rgba(255,255,255,.5) inset, 0 6px 16px -8px rgba(244,107,22,.55);
+  transition: transform .12s ease;
+  cursor: pointer;
+}
+.cal-confirm:hover { transform: translateY(-1px); }
+.cal-confirm svg { width: 14px; height: 14px; }
+
+.cal-confirmed {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(47, 138, 79, 0.08);
+  border: 1px solid rgba(47, 138, 79, 0.22);
+}
+.cal-confirmed-icon {
+  display: grid;
+  place-items: center;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: #1F8A4F;
+  color: #FFFFFF;
+  flex-shrink: 0;
+}
+.cal-confirmed-icon svg { width: 16px; height: 16px; }
+.cal-confirmed-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.cal-confirmed-sub {
+  font-size: 12px;
+  color: var(--ink-2);
+  margin-top: 1px;
+}
+
+/* Mock Stripe checkout fields */
+.mock-tag {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.mock-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  flex: 1;
+  min-width: 0;
+}
+.mock-field input {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.mock-field input:focus {
+  border-color: rgba(244, 107, 22, 0.4);
+  box-shadow: 0 0 0 3px rgba(244, 107, 22, 0.1);
+}
+.mock-row {
+  display: flex;
+  gap: 10px;
+}

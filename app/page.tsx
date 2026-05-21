@@ -25,13 +25,20 @@ import { EndingScreen } from "./ending-screen";
 import { compressIfNeeded, MAX_IMAGE_BYTES } from "./compress";
 import { Icon } from "./icons";
 import { ProductCards } from "./product-cards";
+import { SummaryWidget, type OrderStatus } from "./summary-widget";
+import { InstallerCalendar } from "./installer-calendar";
 import { log, warn } from "./log";
 import { audio } from "./audio";
 import { MuteToggle } from "./mute-toggle";
 
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
-);
+const MOCK_STRIPE =
+  process.env.NEXT_PUBLIC_MOCK_STRIPE !== "false";
+const STRIPE_PUBLISHABLE_KEY =
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+const stripePromise =
+  !MOCK_STRIPE && STRIPE_PUBLISHABLE_KEY
+    ? loadStripe(STRIPE_PUBLISHABLE_KEY)
+    : null;
 const SUN_BASE = 340;
 const HERO_SIZE = 168;
 const CORNER_SIZE = 40;
@@ -171,6 +178,85 @@ function PaymentForm({ onPaymentComplete }: { onPaymentComplete: () => void }) {
   );
 }
 
+function MockStripeCheckout({
+  onPaymentComplete,
+}: {
+  clientSecret: string;
+  onPaymentComplete: () => void;
+}) {
+  const [status, setStatus] = useState<"idle" | "processing" | "paid">("idle");
+  const [card, setCard] = useState("4242 4242 4242 4242");
+  const [expiry, setExpiry] = useState("12 / 30");
+  const [cvc, setCvc] = useState("123");
+
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      setStatus("processing");
+      window.setTimeout(() => {
+        setStatus("paid");
+        onPaymentComplete();
+      }, 900);
+    },
+    [onPaymentComplete],
+  );
+
+  if (status === "paid") {
+    return (
+      <div className="payment-confirmation">
+        <Icon.Check /> Payment completed! Your Balkonkraftwerk order is confirmed.
+      </div>
+    );
+  }
+
+  return (
+    <div className="stripe-payment">
+      <form onSubmit={handleSubmit} className="payment-form">
+        <div className="payment-form-header">
+          <Icon.Lock />
+          <span>Secure payment</span>
+          <span className="mock-tag">demo mode</span>
+        </div>
+        <label className="mock-field">
+          <span>Card number</span>
+          <input
+            value={card}
+            onChange={(e) => setCard(e.target.value)}
+            inputMode="numeric"
+            autoComplete="cc-number"
+          />
+        </label>
+        <div className="mock-row">
+          <label className="mock-field">
+            <span>Expiry</span>
+            <input
+              value={expiry}
+              onChange={(e) => setExpiry(e.target.value)}
+              autoComplete="cc-exp"
+            />
+          </label>
+          <label className="mock-field">
+            <span>CVC</span>
+            <input
+              value={cvc}
+              onChange={(e) => setCvc(e.target.value)}
+              inputMode="numeric"
+              autoComplete="cc-csc"
+            />
+          </label>
+        </div>
+        <button
+          type="submit"
+          disabled={status === "processing"}
+          className="payment-submit"
+        >
+          {status === "processing" ? "Processing…" : "Pay now"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function StripeCheckout({
   clientSecret,
   onPaymentComplete,
@@ -181,6 +267,7 @@ function StripeCheckout({
   const [status, setStatus] = useState<"loading" | "paid" | "pending">("loading");
 
   useEffect(() => {
+    if (!stripePromise) return;
     stripePromise.then((stripe) => {
       if (!stripe) return;
       stripe.retrievePaymentIntent(clientSecret).then(({ paymentIntent }) => {
@@ -329,6 +416,13 @@ export default function Chat() {
     new Set(),
   );
   const [paymentCompleted, setPaymentCompleted] = useState(returnedFromStripe);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [shipDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 5);
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+    return d;
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -359,6 +453,79 @@ export default function Chat() {
   const isDragging = dragDepth > 0;
 
   const isBusy = status === "submitted" || status === "streaming";
+
+  const orderStatus: OrderStatus = useMemo(() => {
+    if (paymentCompleted) return "paid";
+    for (const m of messages) {
+      for (const part of m.parts ?? []) {
+        const p = part as { type?: string; state?: string };
+        if (p.type === "tool-submitOrder" && p.state === "output-available") {
+          return "placed";
+        }
+      }
+    }
+    return "in-cart";
+  }, [messages, paymentCompleted]);
+
+  const summaryProducts = useMemo(() => {
+    type ProductFromTool = {
+      id: string;
+      price: number;
+      annualKwh?: number;
+      annualSavings?: number;
+    };
+    const TIER_META: Record<
+      string,
+      { tier: string; tagline: string; image: string; recommended?: boolean }
+    > = {
+      starter: {
+        tier: "Starter",
+        tagline: "Panels only",
+        image: "/products/product-starter.png",
+      },
+      battery: {
+        tier: "Standard",
+        tagline: "Panels + battery",
+        image: "/products/product-standard.png",
+      },
+      smart: {
+        tier: "Maximum",
+        tagline: "Panels + battery + meter",
+        image: "/products/product-maximum.png",
+        recommended: true,
+      },
+    };
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      for (const part of m.parts ?? []) {
+        const p = part as unknown as {
+          type?: string;
+          state?: string;
+          output?: { products?: ProductFromTool[] };
+        };
+        if (
+          p.type === "tool-getProducts" &&
+          p.state === "output-available" &&
+          p.output?.products?.length
+        ) {
+          return p.output.products
+            .map((prod) => {
+              const meta = TIER_META[prod.id];
+              if (!meta) return null;
+              return {
+                id: prod.id,
+                ...meta,
+                price: prod.price,
+                annualKwh: prod.annualKwh ?? 0,
+                annualSavings: prod.annualSavings ?? 0,
+              };
+            })
+            .filter((p): p is NonNullable<typeof p> => p !== null);
+        }
+      }
+    }
+    return [];
+  }, [messages]);
 
   useEffect(() => {
     log("chat.status", { status, messages: messages.length });
@@ -989,6 +1156,27 @@ export default function Chat() {
             <MuteToggle variant="app" />
           </header>
 
+          {selectedProductId &&
+            (() => {
+              const product = summaryProducts.find(
+                (p) => p.id === selectedProductId,
+              );
+              if (!product) return null;
+              return (
+                <SummaryWidget
+                  product={product}
+                  status={orderStatus}
+                  shipDate={shipDate}
+                  subsidy={{
+                    name: "Klimafreundliches Wohnen Köln",
+                    amount: 150,
+                    applicableTo: ["starter"],
+                  }}
+                  locationLabel="Köln · south balcony"
+                />
+              );
+            })()}
+
           <div className="chat-region" ref={scrollRef}>
             <div className="chat-inner" ref={chatInnerRef}>
               {messages.map((message) => {
@@ -1009,6 +1197,7 @@ export default function Chat() {
                     )}
                     <div className="body">
                       {message.role === "assistant" && <div className="who">Helios</div>}
+                      {/* Text + image parts first so widgets land at the bottom of the message. */}
                       {message.parts.map((part, i) => {
                         if (part.type === "text") {
                           return message.role === "assistant" ? (
@@ -1034,6 +1223,10 @@ export default function Chat() {
                             />
                           );
                         }
+                        return null;
+                      })}
+                      {/* Then render tool widgets — products / checkout — at the end. */}
+                      {message.parts.map((part, i) => {
                         if (part.type === "tool-getProducts") {
                           const toolPart = part as unknown as {
                             state: string;
@@ -1047,10 +1240,11 @@ export default function Chat() {
                               <ProductCards
                                 key={`${message.id}-${i}`}
                                 products={toolPart.output.products}
-                                selectedId={null}
+                                selectedId={selectedProductId}
                                 onSelect={(id) => {
                                   const product = toolPart.output!.products!.find((p) => p.id === id);
                                   if (product) {
+                                    setSelectedProductId(id);
                                     handleChipClick(message.id, `I'd like the ${product.name} option`);
                                   }
                                 }}
@@ -1070,10 +1264,21 @@ export default function Chat() {
                             toolPart.state === "output-available" &&
                             toolPart.output?.clientSecret
                           ) {
-                            return (
+                            const cs = toolPart.output.clientSecret;
+                            const useMock =
+                              MOCK_STRIPE ||
+                              cs.startsWith("mock_") ||
+                              !stripePromise;
+                            return useMock ? (
+                              <MockStripeCheckout
+                                key={`${message.id}-${i}`}
+                                clientSecret={cs}
+                                onPaymentComplete={handlePaymentComplete}
+                              />
+                            ) : (
                               <StripeCheckout
                                 key={`${message.id}-${i}`}
-                                clientSecret={toolPart.output.clientSecret}
+                                clientSecret={cs}
                                 onPaymentComplete={handlePaymentComplete}
                               />
                             );
@@ -1123,6 +1328,53 @@ export default function Chat() {
                   </div>
                 )}
               {paymentCompleted && <PaymentConfirmation />}
+              {paymentCompleted && selectedProductId === "smart" && (
+                <div className="msg ai">
+                  <div className="body">
+                    <div className="who">Helios</div>
+                    <p>
+                      Last thing — your smart meter needs a quick install. The
+                      technician brings the meter and mounts it on your
+                      Stromzähler. No drilling, no electrician needed.
+                    </p>
+                    <InstallerCalendar
+                      shipDate={shipDate}
+                      onConfirm={async (date) => {
+                        if (!ticketId) {
+                          warn("appointment.no-ticket");
+                          return;
+                        }
+                        log("appointment.confirm", {
+                          date: date.toISOString(),
+                        });
+                        try {
+                          const res = await fetch(
+                            "/api/chat-session/appointment",
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                ticketId,
+                                appointmentDate: date.toISOString(),
+                                slotWindow: "10:00-11:30",
+                              }),
+                            },
+                          );
+                          if (res.ok) {
+                            log("appointment.synced");
+                          } else {
+                            warn("appointment.sync.failed", {
+                              status: res.status,
+                            });
+                          }
+                        } catch (err) {
+                          warn("appointment.sync.error", err);
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

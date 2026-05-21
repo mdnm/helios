@@ -17,10 +17,26 @@ interface ProductConfig {
   bestFor: string;
 }
 
-const TIER_META: Record<string, { tier: string; tagline: string; recommended?: boolean }> = {
-  starter: { tier: "Starter", tagline: "Panels only" },
-  battery: { tier: "Standard", tagline: "Panels + battery" },
-  smart: { tier: "Maximum", tagline: "Panels + battery + meter", recommended: true },
+const TIER_META: Record<
+  string,
+  { tier: string; tagline: string; image: string; recommended?: boolean }
+> = {
+  starter: {
+    tier: "Starter",
+    tagline: "Panels only",
+    image: "/products/product-starter.png",
+  },
+  battery: {
+    tier: "Standard",
+    tagline: "Panels + battery",
+    image: "/products/product-standard.png",
+  },
+  smart: {
+    tier: "Maximum",
+    tagline: "Panels + battery + meter",
+    image: "/products/product-maximum.png",
+    recommended: true,
+  },
 };
 
 function specLines(p: ProductConfig) {
@@ -73,6 +89,11 @@ function ProductCard({
         </div>
       )}
 
+      <div className="product-image">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={meta.image} alt={`${meta.tier} balcony PV setup`} />
+      </div>
+
       <div className="product-body">
         <div className="product-head">
           <div className="product-tier">{meta.tier}</div>
@@ -101,6 +122,10 @@ function ProductCard({
             );
           })}
         </ul>
+
+        {product.bestFor && (
+          <div className="product-best">{product.bestFor}</div>
+        )}
 
         <button
           className={`product-select ${selected ? "is-selected" : ""}`}
