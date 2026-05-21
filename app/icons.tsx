@@ -89,4 +89,56 @@ export const Icon = {
       <line x1="16" y1="9" x2="22" y2="15" />
     </svg>
   ),
+  Sparkle: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <path d="M12 3l1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3z" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  Check: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <polyline points="5 12 10 17 19 8" />
+    </svg>
+  ),
+  Lock: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} {...p}>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  ),
+  Panels: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} strokeWidth={1.7} {...p}>
+      <rect x="3" y="4" width="8" height="14" rx="0.6" />
+      <rect x="13" y="4" width="8" height="14" rx="0.6" />
+      <path d="M3 9h8M3 13h8M13 9h8M13 13h8" />
+      <path d="M12 18v3M9 21h6" />
+    </svg>
+  ),
+  Inverter: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} strokeWidth={1.7} {...p}>
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <path d="M11 8l-3 5h4l-3 5" />
+      <circle cx="16" cy="9" r="0.9" fill="currentColor" />
+    </svg>
+  ),
+  Battery: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} strokeWidth={1.7} {...p}>
+      <rect x="3" y="7" width="16" height="10" rx="2" />
+      <path d="M21 11v2" />
+      <path d="M7 10v4M10 10v4M13 10v4" />
+    </svg>
+  ),
+  Meter: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} strokeWidth={1.7} {...p}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 12l4 -3" />
+      <circle cx="12" cy="12" r="0.9" fill="currentColor" />
+      <path d="M5 12h1M18 12h1M12 5v1M12 18v1" />
+    </svg>
+  ),
+  Minus: (p: SVGProps<SVGSVGElement>) => (
+    <svg {...base} strokeWidth={1.7} {...p}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M7 12h10" />
+    </svg>
+  ),
 };

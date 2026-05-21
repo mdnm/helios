@@ -1,6 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import type { UIMessage } from "ai";
 import {
   useCallback,
   useEffect,
@@ -10,23 +11,37 @@ import {
   useState,
 } from "react";
 import ReactMarkdown from "react-markdown";
+import {
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
+import type { StripeElementsOptions } from "@stripe/stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
 import { HeliosSun } from "./helios-sun";
 import { OpeningScreen } from "./opening-screen";
 import { EndingScreen } from "./ending-screen";
 import { compressIfNeeded, MAX_IMAGE_BYTES } from "./compress";
 import { Icon } from "./icons";
+import { ProductCards } from "./product-cards";
 import { log, warn } from "./log";
 import { audio } from "./audio";
 import { MuteToggle } from "./mute-toggle";
 
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!,
+);
 const SUN_BASE = 340;
 const HERO_SIZE = 168;
 const CORNER_SIZE = 40;
+const TICKET_COOKIE = "helios-ticket-id";
 const SCREEN_SEQUENCE = ["opening", "app", "ending"] as const;
 
 type Screen = (typeof SCREEN_SEQUENCE)[number];
 type Phase = "hero" | "chat";
 type SunPhase = "idle" | "fade-in" | "loading" | "fade-out";
+type TicketMessage = { role: string; content: string; parts?: Array<Record<string, unknown>>; timestamp?: string };
 
 const ALLOWED_TYPES = new Set([
   "image/jpeg",
@@ -42,7 +57,263 @@ const SUGGESTIONS = [
   { icon: <Icon.Mail />, t: "Draft my landlord letter" },
 ];
 
+type SuggestRepliesOutput = { options: string[] };
+
+function getTicketId(): string | null {
+  const match = document.cookie.match(
+    new RegExp(`(?:^|; )${TICKET_COOKIE}=([^;]*)`),
+  );
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function setTicketCookie(ticketId: string) {
+  document.cookie = `${TICKET_COOKIE}=${encodeURIComponent(ticketId)}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
+}
+
+function clearTicketCookie() {
+  document.cookie = `${TICKET_COOKIE}=; path=/; max-age=0`;
+}
+
+function hasStripeReturn(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.has("session_id");
+}
+
+function clearStripeReturnUrl() {
+  if (typeof window === "undefined") return;
+  window.history.replaceState({}, "", window.location.pathname);
+}
+
+function PaymentConfirmation() {
+  return (
+    <div className="msg ai">
+      <div className="body">
+        <div className="who">Helios</div>
+        <p>
+          Payment completed! Your Balkonkraftwerk order is confirmed. You&apos;ll
+          receive a confirmation email shortly.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+const STRIPE_APPEARANCE = {
+  theme: "flat" as const,
+  variables: {
+    colorPrimary: "#F46B16",
+    colorBackground: "#FFFFFF",
+    colorText: "#1F1408",
+    colorDanger: "#df1b41",
+    fontFamily: "Onest, ui-sans-serif, system-ui, -apple-system, sans-serif",
+    spacingUnit: "4px",
+    borderRadius: "12px",
+    colorTextSecondary: "#5A4523",
+    colorTextPlaceholder: "#BBA98A",
+  },
+  rules: {
+    ".Input": {
+      border: "1px solid rgba(74, 47, 14, 0.14)",
+      boxShadow: "none",
+      padding: "12px",
+    },
+    ".Input:focus": {
+      border: "1px solid rgba(244, 107, 22, 0.4)",
+      boxShadow: "0 0 0 3px rgba(244, 107, 22, 0.1)",
+    },
+    ".Label": {
+      fontSize: "13px",
+      fontWeight: "500",
+      color: "#5A4523",
+    },
+  },
+};
+
+function PaymentForm({ onPaymentComplete }: { onPaymentComplete: () => void }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setSubmitting(true);
+    setError(null);
+
+    const { error: stripeError } = await stripe.confirmPayment({
+      elements,
+      confirmParams: { return_url: window.location.origin },
+      redirect: "if_required",
+    });
+
+    if (stripeError) {
+      setError(stripeError.message ?? "Payment failed");
+      setSubmitting(false);
+    } else {
+      onPaymentComplete();
+    }
+  }, [stripe, elements, onPaymentComplete]);
+
+  return (
+    <form onSubmit={handleSubmit} className="payment-form">
+      <div className="payment-form-header">
+        <Icon.Lock />
+        <span>Secure payment</span>
+      </div>
+      <PaymentElement />
+      {error && <div className="payment-error">{error}</div>}
+      <button type="submit" disabled={!stripe || submitting} className="payment-submit">
+        {submitting ? "Processing…" : "Pay now"}
+      </button>
+    </form>
+  );
+}
+
+function StripeCheckout({
+  clientSecret,
+  onPaymentComplete,
+}: {
+  clientSecret: string;
+  onPaymentComplete: () => void;
+}) {
+  const [status, setStatus] = useState<"loading" | "paid" | "pending">("loading");
+
+  useEffect(() => {
+    stripePromise.then((stripe) => {
+      if (!stripe) return;
+      stripe.retrievePaymentIntent(clientSecret).then(({ paymentIntent }) => {
+        if (paymentIntent?.status === "succeeded") {
+          setStatus("paid");
+          onPaymentComplete();
+        } else {
+          setStatus("pending");
+        }
+      });
+    });
+  }, [clientSecret, onPaymentComplete]);
+
+  if (status === "loading") return null;
+
+  if (status === "paid") {
+    return (
+      <div className="payment-confirmation">
+        <Icon.Check /> Payment completed! Your Balkonkraftwerk order is confirmed.
+      </div>
+    );
+  }
+
+  const options: StripeElementsOptions = {
+    clientSecret,
+    appearance: STRIPE_APPEARANCE,
+    fonts: [
+      { cssSrc: "https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600&display=swap" },
+    ],
+  };
+
+  return (
+    <div className="stripe-payment">
+      <Elements stripe={stripePromise} options={options}>
+        <PaymentForm onPaymentComplete={() => { setStatus("paid"); onPaymentComplete(); }} />
+      </Elements>
+    </div>
+  );
+}
+
+async function syncToEpilot(ticketId: string, messages: UIMessage[]) {
+  try {
+    await fetch("/api/chat-session", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticketId, messages }),
+    });
+  } catch {
+    // best-effort
+  }
+}
+
+function useTicketSession() {
+  const [ticketId, setTicketId] = useState<string | null>(null);
+  const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [returnedFromStripe] = useState(hasStripeReturn);
+
+  useEffect(() => {
+    if (returnedFromStripe) clearStripeReturnUrl();
+  }, [returnedFromStripe]);
+
+  useEffect(() => {
+    async function init() {
+      const existing = getTicketId();
+      if (existing) {
+        try {
+          const res = await fetch(`/api/chat-session?ticketId=${existing}`);
+          if (res.ok) {
+            const data = await res.json();
+            setTicketId(data.ticketId);
+            if (data.messages?.length) {
+              setInitialMessages(
+                data.messages.map((m: TicketMessage, i: number) => ({
+                  id: `restored-${i}`,
+                  role: m.role as "user" | "assistant",
+                  parts: Array.isArray(m.parts) && m.parts.length > 0
+                    ? m.parts.map((p) => {
+                        if (typeof p.type === "string" && p.type.startsWith("tool-")) {
+                          return { ...p, type: p.type } as unknown as { type: "text"; text: string };
+                        }
+                        return { type: "text" as const, text: String(p.text ?? "") };
+                      })
+                    : [{ type: "text" as const, text: m.content }],
+                  createdAt: m.timestamp ? new Date(m.timestamp) : new Date(),
+                })),
+              );
+            }
+            setLoading(false);
+            return;
+          }
+        } catch {
+          // stale cookie
+        }
+      }
+
+      try {
+        const res = await fetch("/api/chat-session", { method: "POST" });
+        const data = await res.json();
+        setTicketId(data.ticketId);
+        setTicketCookie(data.ticketId);
+      } catch {
+        // offline
+      }
+      setLoading(false);
+    }
+
+    init();
+  }, []);
+
+  const resetSession = useCallback(async () => {
+    clearTicketCookie();
+    try {
+      const res = await fetch("/api/chat-session", { method: "POST" });
+      const data = await res.json();
+      setTicketId(data.ticketId);
+      setTicketCookie(data.ticketId);
+    } catch {
+      setTicketId(null);
+    }
+  }, []);
+
+  return { ticketId, initialMessages, loading, returnedFromStripe, resetSession };
+}
+
 export default function Chat() {
+  const {
+    ticketId,
+    initialMessages,
+    loading,
+    returnedFromStripe,
+    resetSession,
+  } = useTicketSession();
   const { messages, sendMessage, status, setMessages } = useChat();
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<FileList | undefined>(undefined);
@@ -53,6 +324,11 @@ export default function Chat() {
   const [sunPhase, setSunPhase] = useState<SunPhase>("idle");
   const [dragDepth, setDragDepth] = useState(0);
   const [appLeaving, setAppLeaving] = useState(false);
+  // Track which messages' chips have already been used so we hide them after click.
+  const [usedChipMessageIds, setUsedChipMessageIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [paymentCompleted, setPaymentCompleted] = useState(returnedFromStripe);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -63,6 +339,11 @@ export default function Chat() {
   const prevScreenRef = useRef<Screen>("opening");
   const prevPhaseRef = useRef<Phase>("hero");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const chatInnerRef = useRef<HTMLDivElement>(null);
+  const restoredMessagesRef = useRef(false);
+  const lastSyncedLength = useRef(0);
+  // Mutable so updating it from the scroll handler doesn't trigger a re-render.
+  const stickToBottomRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const sunPhaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentAnimRef = useRef<Animation | null>(null);
@@ -83,6 +364,26 @@ export default function Chat() {
     log("chat.status", { status, messages: messages.length });
   }, [status, messages.length]);
 
+  useEffect(() => {
+    if (loading || restoredMessagesRef.current || !initialMessages.length) {
+      return;
+    }
+    restoredMessagesRef.current = true;
+    setMessages(initialMessages);
+    setPhase("chat");
+  }, [initialMessages, loading, setMessages]);
+
+  useEffect(() => {
+    if (
+      status === "ready" &&
+      messages.length > 0 &&
+      messages.length !== lastSyncedLength.current &&
+      ticketId
+    ) {
+      lastSyncedLength.current = messages.length;
+      void syncToEpilot(ticketId, messages);
+    }
+  }, [messages, status, ticketId]);
   const inChat = phase !== "hero" || messages.length > 0;
   const composerSlid = phase === "chat";
   const canEnd = phase === "chat" && messages.length > 0 && !isBusy;
@@ -294,6 +595,64 @@ export default function Chat() {
     return () => ro.disconnect();
   }, [findActiveSlot, animateSun]);
 
+  // Track whether the user is "stuck" to the bottom of the chat. We only
+  // auto-scroll while they are — if they scroll up to read earlier messages,
+  // we stop yanking them down. A user-initiated scroll close to the bottom
+  // (within 80px) re-engages stickiness.
+  //
+  // Stored in a ref (not state) so updates from the scroll handler don't
+  // trigger React re-renders.
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const onScroll = () => {
+      const distance =
+        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+      stickToBottomRef.current = distance < 80;
+    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => scroller.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Drive auto-scroll directly off React's render cycle. The AI SDK gives us
+  // a fresh `messages` array reference on every streamed token batch (and on
+  // every part update), so this useLayoutEffect re-runs in lockstep with
+  // streaming — far more reliable than a ResizeObserver, which can miss
+  // small or coalesced reflows. Using useLayoutEffect means the scroll lands
+  // before the browser paints, so the user never sees an unscrolled frame.
+  useLayoutEffect(() => {
+    if (!stickToBottomRef.current) return;
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    scroller.scrollTop = scroller.scrollHeight;
+  }, [messages, isBusy]);
+
+  // ResizeObserver as a belt-and-suspenders fallback for layout changes that
+  // aren't tied to a render — images loading, fonts swapping in, the composer
+  // resizing as the textarea grows.
+  useEffect(() => {
+    const inner = chatInnerRef.current;
+    const scroller = scrollRef.current;
+    if (!inner || !scroller) return;
+    const ro = new ResizeObserver(() => {
+      if (stickToBottomRef.current) scroller.scrollTop = scroller.scrollHeight;
+    });
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, []);
+
+  // When a user message is sent, force-stick to bottom even if they had
+  // scrolled up — sending implies re-engagement with the live conversation.
+  useEffect(() => {
+    if (!messages.length) return;
+    if (messages[messages.length - 1].role === "user") {
+      stickToBottomRef.current = true;
+    }
+    // Deliberately keyed on length only; the layout effect above already
+    // handles streamed-token updates of the same message.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length]);
+
   // Autosize textarea
   useEffect(() => {
     const ta = textareaRef.current;
@@ -478,8 +837,11 @@ export default function Chat() {
       if (next === "app") {
         setMessages([]);
         setInput("");
+        setPaymentCompleted(false);
+        lastSyncedLength.current = 0;
         clearAttachment();
         setPhase("hero");
+        void resetSession();
       }
       // Play composer collapse before unmounting the app screen.
       if (screen === "app" && next !== "app") {
@@ -489,7 +851,7 @@ export default function Chat() {
       }
       setScreen(next);
     },
-    [screen, setMessages, clearAttachment],
+    [screen, setMessages, clearAttachment, resetSession],
   );
 
   // Cmd/Ctrl + ArrowLeft/Right walks the screen sequence. Capture phase so we
@@ -508,6 +870,68 @@ export default function Chat() {
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [screen, goto]);
+
+  const handlePaymentComplete = useCallback(() => {
+    setPaymentCompleted(true);
+    if (ticketId && messages.length > 0) {
+      const paymentMessage = {
+        id: `payment-confirmed-${Date.now()}`,
+        role: "assistant" as const,
+        parts: [
+          {
+            type: "text" as const,
+            text: "Payment completed! Your Balkonkraftwerk order is confirmed. You'll receive a confirmation email shortly.",
+          },
+        ],
+      };
+      void syncToEpilot(ticketId, [...messages, paymentMessage as UIMessage]);
+    }
+  }, [messages, ticketId]);
+
+  const handleChipClick = (messageId: string, option: string) => {
+    if (isBusy || phase !== "chat") return;
+    setUsedChipMessageIds((prev) => {
+      const next = new Set(prev);
+      next.add(messageId);
+      return next;
+    });
+    void handleSend(option);
+  };
+
+  // Pull the latest suggest_replies output from an assistant message, if any.
+  const getChipsForMessage = (message: (typeof messages)[number]) => {
+    if (message.role !== "assistant") return null;
+    if (usedChipMessageIds.has(message.id)) return null;
+    for (let i = message.parts.length - 1; i >= 0; i--) {
+      const part = message.parts[i];
+      if (
+        part.type === "tool-suggestReplies" &&
+        "state" in part &&
+        part.state === "output-available"
+      ) {
+        const output = part.output as SuggestRepliesOutput | undefined;
+        if (output?.options?.length) return output.options;
+      }
+    }
+    return null;
+  };
+
+  // Only show chips on the most recent assistant message — older chips would
+  // be stale conversational context.
+  const lastAssistantId = [...messages]
+    .reverse()
+    .find((m) => m.role === "assistant")?.id;
+
+  if (loading) {
+    return (
+      <div className="stage">
+        <div className="screen app-screen">
+          <div className="ambient" />
+          <div className="loading-session">Loading...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -557,54 +981,125 @@ export default function Chat() {
 
           <header className="head">
             <span className="wordmark">Helios</span>
+            {ticketId && (
+              <span className="ticket-id" title={ticketId}>
+                #{ticketId.slice(0, 8)}
+              </span>
+            )}
             <MuteToggle variant="app" />
           </header>
 
           <div className="chat-region" ref={scrollRef}>
-            <div className="chat-inner">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`msg ${message.role === "user" ? "user" : "ai"}`}
-                >
-                  {message.role === "assistant" && (
-                    <div
-                      className="ai-avatar"
-                      style={{ width: CORNER_SIZE, height: CORNER_SIZE }}
-                    />
-                  )}
-                  <div className="body">
-                    {message.role === "assistant" && <div className="who">Helios</div>}
-                    {message.parts.map((part, i) => {
-                      if (part.type === "text") {
-                        return message.role === "assistant" ? (
-                          <ReactMarkdown key={`${message.id}-${i}`}>
-                            {part.text}
-                          </ReactMarkdown>
-                        ) : (
-                          <p key={`${message.id}-${i}`} style={{ whiteSpace: "pre-wrap" }}>
-                            {part.text}
-                          </p>
-                        );
-                      }
-                      if (
-                        part.type === "file" &&
-                        part.mediaType?.startsWith("image/")
-                      ) {
-                        return (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            key={`${message.id}-${i}`}
-                            src={part.url}
-                            alt="Uploaded"
-                          />
-                        );
-                      }
-                      return null;
-                    })}
+            <div className="chat-inner" ref={chatInnerRef}>
+              {messages.map((message) => {
+                const chips =
+                  message.id === lastAssistantId
+                    ? getChipsForMessage(message)
+                    : null;
+                return (
+                  <div
+                    key={message.id}
+                    className={`msg ${message.role === "user" ? "user" : "ai"}`}
+                  >
+                    {message.role === "assistant" && (
+                      <div
+                        className="ai-avatar"
+                        style={{ width: CORNER_SIZE, height: CORNER_SIZE }}
+                      />
+                    )}
+                    <div className="body">
+                      {message.role === "assistant" && <div className="who">Helios</div>}
+                      {message.parts.map((part, i) => {
+                        if (part.type === "text") {
+                          return message.role === "assistant" ? (
+                            <ReactMarkdown key={`${message.id}-${i}`}>
+                              {part.text}
+                            </ReactMarkdown>
+                          ) : (
+                            <p key={`${message.id}-${i}`} style={{ whiteSpace: "pre-wrap" }}>
+                              {part.text}
+                            </p>
+                          );
+                        }
+                        if (
+                          part.type === "file" &&
+                          part.mediaType?.startsWith("image/")
+                        ) {
+                          return (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              key={`${message.id}-${i}`}
+                              src={part.url}
+                              alt="Uploaded"
+                            />
+                          );
+                        }
+                        if (part.type === "tool-getProducts") {
+                          const toolPart = part as unknown as {
+                            state: string;
+                            output?: { products?: Array<{ id: string; name: string; modules: string; totalWp: number; inverter: string; battery: string | null; smartMeter: string | null; mounting: string; connection: string; price: number; selfConsumptionRate: number; bestFor: string }> };
+                          };
+                          if (
+                            toolPart.state === "output-available" &&
+                            toolPart.output?.products?.length
+                          ) {
+                            return (
+                              <ProductCards
+                                key={`${message.id}-${i}`}
+                                products={toolPart.output.products}
+                                selectedId={null}
+                                onSelect={(id) => {
+                                  const product = toolPart.output!.products!.find((p) => p.id === id);
+                                  if (product) {
+                                    handleChipClick(message.id, `I'd like the ${product.name} option`);
+                                  }
+                                }}
+                              />
+                            );
+                          }
+                        }
+                        if (
+                          part.type === "tool-submitOrder" &&
+                          !paymentCompleted
+                        ) {
+                          const toolPart = part as unknown as {
+                            state: string;
+                            output?: { clientSecret?: string };
+                          };
+                          if (
+                            toolPart.state === "output-available" &&
+                            toolPart.output?.clientSecret
+                          ) {
+                            return (
+                              <StripeCheckout
+                                key={`${message.id}-${i}`}
+                                clientSecret={toolPart.output.clientSecret}
+                                onPaymentComplete={handlePaymentComplete}
+                              />
+                            );
+                          }
+                        }
+                        return null;
+                      })}
+                      {chips && (
+                        <div className="chips">
+                          {chips.map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              className="chip"
+                              onClick={() => handleChipClick(message.id, option)}
+                              disabled={isBusy || phase !== "chat"}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {isBusy &&
                 messages.length > 0 &&
@@ -627,6 +1122,7 @@ export default function Chat() {
                     </div>
                   </div>
                 )}
+              {paymentCompleted && <PaymentConfirmation />}
             </div>
           </div>
 

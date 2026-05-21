@@ -5,7 +5,7 @@ import {
   stepCountIs,
 } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
-import { systemPrompt } from "@/lib/system-prompt";
+import { buildSystemPrompt, fetchCustomerContext } from "@/lib/system-prompt";
 import { extractLocation } from "@/lib/tools/extract-location";
 import { extractBalconyInfo } from "@/lib/tools/extract-balcony-info";
 import { extractConsumption } from "@/lib/tools/extract-consumption";
@@ -13,6 +13,8 @@ import { getProducts } from "@/lib/tools/get-products";
 import { calcRoi } from "@/lib/tools/calc-roi";
 import { getSubsidies } from "@/lib/tools/get-subsidies";
 import { draftLandlordLetter } from "@/lib/tools/draft-landlord-letter";
+import { suggestReplies } from "@/lib/tools/suggest-replies";
+import { submitOrder } from "@/lib/tools/submit-order";
 
 export const maxDuration = 60;
 
@@ -40,9 +42,11 @@ export async function POST(req: Request) {
     lastParts: partTypes,
   });
 
+  const customerContext = await fetchCustomerContext();
+
   const result = streamText({
     model: anthropic("claude-sonnet-4-5"),
-    system: systemPrompt,
+    system: buildSystemPrompt(customerContext),
     messages: await convertToModelMessages(messages),
     stopWhen: stepCountIs(5),
     tools: {
@@ -53,6 +57,8 @@ export async function POST(req: Request) {
       calcRoi,
       getSubsidies,
       draftLandlordLetter,
+      suggestReplies,
+      submitOrder,
     },
     onStepFinish: ({ toolCalls, toolResults, finishReason, usage }) => {
       logApi("chat.step", {
