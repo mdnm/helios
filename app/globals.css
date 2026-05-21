@@ -156,9 +156,16 @@ input, textarea { font-family: inherit; }
 .shared-sun.screen-opening,
 .shared-sun.screen-ending {
   filter:
-    drop-shadow(0 0 56px rgba(255, 255, 255, 0.95))
-    drop-shadow(0 0 180px rgba(255, 255, 255, 0.55))
-    drop-shadow(0 0 320px rgba(255, 255, 255, 0.30));
+    /* Razor-thin contour — the brightest edge, defines the disc */
+    drop-shadow(0 0 6px rgba(255, 255, 255, 1))
+    /* Close hot halo — boosts edge contrast against the warm sky */
+    drop-shadow(0 0 22px rgba(255, 255, 255, 0.90))
+    /* Warm offset — readable elevation cue, stays on-palette */
+    drop-shadow(0 10px 32px rgba(255, 130, 30, 0.50))
+    /* Mid halo */
+    drop-shadow(0 0 110px rgba(255, 255, 255, 0.60))
+    /* Atmospheric outer bloom */
+    drop-shadow(0 0 260px rgba(255, 255, 255, 0.32));
 }
 .shared-sun.screen-app {
   filter:
@@ -341,21 +348,28 @@ input, textarea { font-family: inherit; }
 }
 
 /* ───── Opening screen ───── */
-.opening-screen {
-  cursor: pointer;
-}
-.opening-screen:focus { outline: none; }
-.opening-screen:focus-visible {
-  outline: 3px solid rgba(255, 250, 236, 0.95);
-  outline-offset: -8px;
-  border-radius: 12px;
-}
+/* Background is no longer the click target — only the sun is. Background
+   clicks still bubble to the pointerdown listener (which unlocks audio),
+   they just don't transition. */
 .opening-screen .opening-mark {
   position: absolute;
   left: 50%;
   top: 10%;
   transform: translate(-50%, 0);
   z-index: 3;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  border-radius: 50%;
+}
+.opening-screen .opening-mark:focus { outline: none; }
+.opening-screen .opening-mark:focus-visible {
+  outline: 3px solid rgba(255, 250, 236, 0.95);
+  outline-offset: 8px;
 }
 
 /* ───── Ending screen ───── */

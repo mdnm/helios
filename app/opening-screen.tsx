@@ -13,11 +13,9 @@ export function OpeningScreen({ onWake }: { onWake: () => void }) {
   useEffect(() => {
     const el = screenRef.current;
     if (!el) return;
-    // Try to start the ambient immediately. On returns to the opening screen
-    // the AudioContext is already unlocked from a prior gesture, so this just
-    // works. On the very first visit, browser autoplay policy will reject the
-    // play() promise — we catch silently inside playAmbient and the gesture
-    // listener below picks up the next pointer/key press.
+    // Try immediately. Works on returns to the opening screen (AudioContext
+    // already unlocked from a prior gesture). On the very first visit the
+    // browser will reject autoplay — the gesture listener below picks it up.
     audio.playAmbient();
     const onFirstGesture = () => {
       audio.unlock();
@@ -32,27 +30,21 @@ export function OpeningScreen({ onWake }: { onWake: () => void }) {
   }, []);
 
   return (
-    <main
-      ref={screenRef}
-      className="screen opening-screen"
-      onClick={onWake}
-      role="button"
-      tabIndex={0}
-      aria-label="Wake Helios"
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onWake();
-      }}
-    >
+    <main ref={screenRef} className="screen opening-screen">
       <div className="warm-sky" aria-hidden="true" />
       <Horizon />
-      <div className="opening-mark">
+      <button
+        type="button"
+        className="opening-mark"
+        onClick={onWake}
+        aria-label="Wake Helios"
+      >
         <div
           className="sun-slot sun-slot-opening"
           style={{ width: OPENING_SIZE, height: OPENING_SIZE }}
           aria-hidden="true"
         />
-        <span className="sr-only">Helios</span>
-      </div>
+      </button>
       <MuteToggle variant="opening" />
     </main>
   );
