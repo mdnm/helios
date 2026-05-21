@@ -1,12 +1,12 @@
 "use client";
 
 type HeliosSunProps = {
-  state?: "idle" | "loading";
+  state?: "idle" | "fade-in" | "loading" | "fade-out";
 };
 
 export function HeliosSun({ state = "idle" }: HeliosSunProps) {
   return (
-    <svg viewBox="0 0 512 512" className={`helios-sun ${state}`} aria-label="Helios">
+    <svg viewBox="0 0 512 512" className={`helios-sun ${state}`} role="img" aria-label="Helios sun">
       <defs>
         <linearGradient id="hsunGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#FFD93D" />
